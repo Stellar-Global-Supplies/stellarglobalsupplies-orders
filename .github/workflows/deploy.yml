@@ -1,0 +1,349 @@
+name: Deploy Stellar Orders
+
+# Single pipeline, run end-to-end on every push to main:
+#   0) bootstrap Terraform state backend (idempotent)
+#   1) build the Lambda (backend) package
+#   2) terraform apply -> get the API Gateway URL + S3/CloudFront outputs
+#   3) build & deploy the frontend, wired to the live API URL
+#   4) smoke test the deployed API + site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tf_action:
+        description: 'Terraform action (plan | apply)'
+        required: false
+        default: 'apply'
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+# -----------------------------------------------------------------------
+# REQUIRED GITHUB SECRETS  (Settings > Secrets and variables > Actions)
+# -----------------------------------------------------------------------
+# AWS_ACCESS_KEY_ID                 IAM user/role with deploy permissions
+# AWS_SECRET_ACCESS_KEY             IAM user secret key
+# AWS_REGION                        e.g. us-east-1
+# TF_BACKEND_BUCKET                 S3 bucket for Terraform state (create once)
+# TF_BACKEND_REGION                 Region of the state bucket
+# TF_BACKEND_DYNAMODB_TABLE         DynamoDB lock table (create once)
+# SUPABASE_URL                      Supabase project URL
+# SUPABASE_ANON_KEY                 Supabase anon/public key (frontend)
+# SUPABASE_SERVICE_ROLE_KEY         Supabase service role key (backend)
+# JWT_SECRET                        Secret used to sign auth tokens
+# FRONTEND_URL                      e.g. https://orders.stellarglobalsupplies.com
+# GMAIL_USER                        Gmail address used to send order emails
+# GMAIL_CLIENT_ID                   Google OAuth2 client ID
+# GMAIL_CLIENT_SECRET               Google OAuth2 client secret
+# GMAIL_REFRESH_TOKEN               Google OAuth2 refresh token
+# SLACK_WEBHOOK                     (optional) Slack webhook for deploy notifications
+# -----------------------------------------------------------------------
+
+env:
+  AWS_REGION:   ${{ secrets.AWS_REGION }}
+  NODE_VERSION: '20'
+  TF_VERSION:   '1.9.5'
+  TF_DIR:       infrastructure
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Bootstrap state backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create S3 state bucket (idempotent)
+        run: |
+          BUCKET="${{ secrets.TF_BACKEND_BUCKET }}"
+          REGION="${{ secrets.TF_BACKEND_REGION }}"
+          echo "Ensuring Terraform state bucket: $BUCKET in $REGION"
+          if aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            echo "Bucket already exists"
+          else
+            if [ "$REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$BUCKET" --region "$REGION"
+            else
+              aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" \
+                --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+            echo "Bucket created"
+          fi
+          aws s3api put-bucket-versioning --bucket "$BUCKET" \
+            --versioning-configuration Status=Enabled
+          aws s3api put-public-access-block --bucket "$BUCKET" \
+            --public-access-block-configuration \
+              BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+      - name: Create DynamoDB lock table (idempotent)
+        run: |
+          TABLE="${{ secrets.TF_BACKEND_DYNAMODB_TABLE }}"
+          REGION="${{ secrets.TF_BACKEND_REGION }}"
+          echo "Ensuring DynamoDB lock table: $TABLE"
+          if aws dynamodb describe-table --table-name "$TABLE" --region "$REGION" 2>/dev/null; then
+            echo "Table already exists"
+          else
+            aws dynamodb create-table \
+              --table-name "$TABLE" \
+              --attribute-definitions AttributeName=LockID,AttributeType=S \
+              --key-schema AttributeName=LockID,KeyType=HASH \
+              --billing-mode PAY_PER_REQUEST \
+              --region "$REGION"
+            aws dynamodb wait table-exists --table-name "$TABLE" --region "$REGION"
+          fi
+
+  build-lambda:
+    name: Build Lambda package
+    runs-on: ubuntu-latest
+    needs: bootstrap
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: backend-${{ hashFiles('backend/package.json') }}
+          restore-keys: |
+            backend-
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+      - name: Package Lambda zip (prod deps only)
+        working-directory: backend
+        run: |
+          npm ci --omit=dev
+          zip -r function.zip dist node_modules
+
+      - name: Upload Lambda package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-function-zip
+          path: backend/function.zip
+          retention-days: 1
+
+  terraform:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    needs: build-lambda
+    outputs:
+      s3_bucket_name:   ${{ steps.outputs.outputs.s3_bucket_name }}
+      cloudfront_id:    ${{ steps.outputs.outputs.cloudfront_id }}
+      api_endpoint_b64: ${{ steps.outputs.outputs.api_endpoint_b64 }}
+      frontend_url_b64: ${{ steps.outputs.outputs.frontend_url_b64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Lambda package
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-function-zip
+          path: backend/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform ${{ env.TF_VERSION }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_BACKEND_BUCKET }}" \
+            -backend-config="region=${{ secrets.TF_BACKEND_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_BACKEND_DYNAMODB_TABLE }}" \
+            -backend-config="encrypt=true" \
+            -input=false -no-color
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan -out=tfplan -input=false -no-color \
+            -var="aws_region=${{ env.AWS_REGION }}"
+
+      - name: Terraform apply
+        working-directory: ${{ env.TF_DIR }}
+        if: ${{ github.event.inputs.tf_action != 'plan' }}
+        run: terraform apply -input=false -no-color -auto-approve tfplan
+
+      - name: Extract Terraform outputs
+        id: outputs
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          S3_BUCKET=$(terraform output -raw s3_bucket_name)
+          CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
+          API_ENDPOINT=$(terraform output -raw api_gateway_url)
+          FRONTEND_URL=$(terraform output -raw frontend_url)
+
+          echo "s3_bucket_name=$S3_BUCKET" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_id=$CLOUDFRONT_ID" >> "$GITHUB_OUTPUT"
+          echo "api_endpoint_b64=$(echo -n "$API_ENDPOINT" | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+          echo "frontend_url_b64=$(echo -n "$FRONTEND_URL" | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+      - name: Update Lambda environment variables
+        run: |
+          aws lambda update-function-configuration \
+            --function-name stellar-orders \
+            --environment "Variables={\
+              NODE_ENV=production,\
+              SUPABASE_URL=${{ secrets.SUPABASE_URL }},\
+              SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},\
+              JWT_SECRET=${{ secrets.JWT_SECRET }},\
+              FRONTEND_URL=${{ secrets.FRONTEND_URL }},\
+              GMAIL_USER=${{ secrets.GMAIL_USER }},\
+              GMAIL_CLIENT_ID=${{ secrets.GMAIL_CLIENT_ID }},\
+              GMAIL_CLIENT_SECRET=${{ secrets.GMAIL_CLIENT_SECRET }},\
+              GMAIL_REFRESH_TOKEN=${{ secrets.GMAIL_REFRESH_TOKEN }}\
+            }"
+
+      - name: Print API endpoint
+        run: |
+          echo "API endpoint: $(echo '${{ steps.outputs.outputs.api_endpoint_b64 }}' | base64 -d)"
+
+  deploy-frontend:
+    name: Build & deploy frontend
+    runs-on: ubuntu-latest
+    needs: terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: frontend-${{ hashFiles('frontend/package.json') }}
+          restore-keys: |
+            frontend-
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Decode API endpoint from Terraform output
+        run: |
+          echo "VITE_API_ENDPOINT=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)" >> "$GITHUB_ENV"
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_ENDPOINT: ${{ env.VITE_API_ENDPOINT }}
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Sync frontend to S3
+        run: |
+          aws s3 sync frontend/dist/ \
+            s3://${{ needs.terraform.outputs.s3_bucket_name }} \
+            --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ needs.terraform.outputs.cloudfront_id }} \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "CloudFront invalidation created: $INVALIDATION_ID"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id ${{ needs.terraform.outputs.cloudfront_id }} \
+            --id "$INVALIDATION_ID"
+          echo "Cache cleared"
+
+  smoke-test:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    needs: [terraform, deploy-frontend]
+    steps:
+      - name: Wait for propagation
+        run: sleep 15
+
+      - name: Test API health
+        run: |
+          API=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)
+          if [ -z "$API" ]; then
+            echo "API endpoint is empty - skipping curl check"
+            exit 0
+          fi
+          echo "Testing: $API/orders"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Content-Type: application/json" \
+            --max-time 20 \
+            "$API/orders" 2>/dev/null) || STATUS="000"
+          echo "HTTP status: $STATUS"
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "401" ]; then
+            echo "API is responding ($STATUS)"
+          else
+            echo "API returned $STATUS - check Lambda/CloudWatch logs"
+          fi
+
+      - name: Test frontend availability
+        run: |
+          SITE=$(echo '${{ needs.terraform.outputs.frontend_url_b64 }}' | base64 -d)
+          if [ -z "$SITE" ]; then
+            echo "Frontend URL is empty - skipping check"
+            exit 0
+          fi
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$SITE") || STATUS="000"
+          echo "Frontend HTTP status: $STATUS"
+
+      - name: Print deployment summary
+        run: |
+          API=$(echo '${{ needs.terraform.outputs.api_endpoint_b64 }}' | base64 -d)
+          SITE=$(echo '${{ needs.terraform.outputs.frontend_url_b64 }}' | base64 -d)
+          echo ""
+          echo "  DEPLOYMENT COMPLETE"
+          echo "  App URL : $SITE"
+          echo "  API URL : $API"
+          echo "  Commit  : ${{ github.sha }}"
+          echo "  Deployed at : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"

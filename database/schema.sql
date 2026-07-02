@@ -33,8 +33,8 @@ CREATE INDEX idx_orders_delivery_timeline ON orders(delivery_timeline);
 CREATE TABLE IF NOT EXISTS order_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  sku_id UUID NOT NULL REFERENCES public.top_sku(id),
-  material_id UUID NOT NULL REFERENCES public.material_spilt(id),
+  product_type TEXT NOT NULL,
+  material TEXT NOT NULL,
   quantity DECIMAL(10, 2) NOT NULL,
   unit VARCHAR(20) NOT NULL CHECK (unit IN ('Pieces', 'Kgs')),
   sale_cost DECIMAL(12, 2) NOT NULL,
@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
-CREATE INDEX idx_order_items_sku_id ON order_items(sku_id);
-CREATE INDEX idx_order_items_material_id ON order_items(material_id);
+CREATE INDEX idx_order_items_product_type ON order_items(product_type);
+CREATE INDEX idx_order_items_material ON order_items(material);
 
 -- Order Status History Table
 CREATE TABLE IF NOT EXISTS order_status_history (

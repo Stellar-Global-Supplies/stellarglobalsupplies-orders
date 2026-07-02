@@ -68,8 +68,26 @@ SUPABASE_SERVICE_ROLE_KEY
 API_ENDPOINT
 # Value: https://api.orders.stellarglobalsupplies.com
 
-SENDGRID_API_KEY
-# Value: SG.xxxxx (copy from SendGrid)
+S3_BUCKET_NAME
+# Value: (from terraform output s3_bucket_name)
+
+JWT_SECRET
+# Value: a long random string used to sign auth tokens
+
+FRONTEND_URL
+# Value: https://orders.stellarglobalsupplies.com
+
+GMAIL_USER
+# Value: stellarglobalsupplies@gmail.com
+
+GMAIL_CLIENT_ID
+# Value: your Google OAuth client ID (from Google Cloud Console)
+
+GMAIL_CLIENT_SECRET
+# Value: your Google OAuth client secret
+
+GMAIL_REFRESH_TOKEN
+# Value: generated once via OAuth Playground — see docs/GMAIL_OAUTH_SETUP.md
 ```
 
 ### Optional Secrets

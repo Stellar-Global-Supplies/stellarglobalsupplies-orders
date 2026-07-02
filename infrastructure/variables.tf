@@ -51,3 +51,8 @@ variable "github_repo_name" {
   type        = string
   default     = "stellarglobalsupplies-orders"
 }
+
+variable "acm_certificate_arn" {
+  description = "ARN of the ACM certificate for the domain"
+  type        = string
+}

@@ -26,7 +26,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-stellar-50 to-indigo-100">
       <div className="card w-full max-w-md">
         <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">
           Stellar Global Supplies

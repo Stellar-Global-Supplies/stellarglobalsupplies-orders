@@ -30,7 +30,7 @@ export default function Dashboard() {
     : orders.filter((o) => o.status === filter)
 
   const statusColors = {
-    'Order Received': 'bg-blue-100 text-blue-800',
+    'Order Received': 'bg-stellar-100 text-stellar-800',
     'Processing': 'bg-yellow-100 text-yellow-800',
     'Ready to Dispatch': 'bg-green-100 text-green-800',
     'Delivered': 'bg-gray-100 text-gray-800',
@@ -48,9 +48,9 @@ export default function Dashboard() {
       <div className="card">
         <h2 className="text-lg font-semibold mb-4">Quick Stats</h2>
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="bg-stellar-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600">Total Orders</p>
-            <p className="text-2xl font-bold text-blue-600">{orders.length}</p>
+            <p className="text-2xl font-bold text-stellar-600">{orders.length}</p>
           </div>
           <div className="bg-yellow-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600">Processing</p>
@@ -119,7 +119,7 @@ export default function Dashboard() {
                       {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
                     </td>
                     <td className="px-4 py-3">
-                      <Link to={`/orders/${order.id}`} className="text-blue-600 hover:underline">
+                      <Link to={`/orders/${order.id}`} className="text-stellar-600 hover:underline">
                         View
                       </Link>
                     </td>

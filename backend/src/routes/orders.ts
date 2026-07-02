@@ -44,8 +44,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     const orderItems = items.map((item: any) => ({
       id: uuidv4(),
       order_id: orderData.id,
-      sku_id: item.sku_id,
-      material_id: item.material_id,
+      product_type: item.product_type,
+      material: item.material,
       quantity: item.quantity,
       unit: item.unit,
       sale_cost: item.sale_cost,
@@ -62,11 +62,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       .from('orders')
       .select(`
         *,
-        order_items (
-          *,
-          top_sku:sku_id(sku),
-          material_spilt:material_id(material)
-        )
+        order_items (*)
       `)
       .eq('id', orderData.id)
       .single()
@@ -76,8 +72,8 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       ...fullOrder,
       items: fullOrder.order_items.map((item: any) => ({
         ...item,
-        sku: item.top_sku?.sku || 'N/A',
-        material: item.material_spilt?.material || 'N/A',
+        sku: item.product_type,
+        material: item.material,
       })),
     })
 
@@ -115,11 +111,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       .from('orders')
       .select(`
         *,
-        order_items (
-          *,
-          top_sku:sku_id(sku),
-          material_spilt:material_id(material)
-        )
+        order_items (*)
       `)
       .eq('created_by', req.user.id)
       .order('created_at', { ascending: false })
@@ -141,11 +133,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       .from('orders')
       .select(`
         *,
-        order_items (
-          *,
-          top_sku:sku_id(sku),
-          material_spilt:material_id(material)
-        )
+        order_items (*)
       `)
       .eq('id', id)
       .eq('created_by', req.user.id)
@@ -236,11 +224,7 @@ router.get('/:id/whatsapp-message', authenticate, async (req: AuthRequest, res: 
       .from('orders')
       .select(`
         *,
-        order_items (
-          *,
-          top_sku:sku_id(sku),
-          material_spilt:material_id(material)
-        )
+        order_items (*)
       `)
       .eq('id', id)
       .eq('created_by', req.user.id)
@@ -254,8 +238,8 @@ router.get('/:id/whatsapp-message', authenticate, async (req: AuthRequest, res: 
       ...order,
       items: order.order_items.map((item: any) => ({
         ...item,
-        sku: item.top_sku?.sku || 'N/A',
-        material: item.material_spilt?.material || 'N/A',
+        sku: item.product_type,
+        material: item.material,
       })),
     })
 

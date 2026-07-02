@@ -69,7 +69,7 @@ export default function OrderDetail() {
         <h1 className="text-4xl font-bold text-gray-800">Order #{order.id.slice(0, 8)}</h1>
         <button
           onClick={() => navigate('/dashboard')}
-          className="text-blue-600 hover:underline"
+          className="text-stellar-600 hover:underline"
         >
           Back to Dashboard
         </button>
@@ -111,7 +111,7 @@ export default function OrderDetail() {
           <div className="space-y-3">
             <div>
               <p className="text-sm text-gray-600">Total Amount</p>
-              <p className="text-2xl font-bold text-blue-600">₹{order.total_amount?.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-stellar-600">₹{order.total_amount?.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Payment Status</p>
@@ -174,7 +174,7 @@ export default function OrderDetail() {
                 disabled={updating || status === order.status}
                 className={`px-4 py-2 rounded font-medium transition-colors ${
                   status === order.status
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-stellar-600 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >

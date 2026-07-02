@@ -14,7 +14,4 @@ frontend_bucket_name = "stellar-orders-frontend"
 lambda_function_name = "stellar-orders"
 lambda_runtime       = "nodejs18.x"
 
-# GitHub Configuration
-github_actions_role_name = "stellar-orders-github-actions"
-github_repo_owner        = "Prasadpb77"
-github_repo_name         = "stellarglobalsupplies-orders"
+acm_certificate_arn = "arn:aws:acm:us-east-1:471112840461:certificate/27fa15e5-f9f8-4b5d-a7b2-a6ee4c212ed7"

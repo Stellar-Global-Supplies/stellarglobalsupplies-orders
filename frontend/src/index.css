@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --primary: #0066cc;
-  --secondary: #f39c12;
+  --primary: #00B98E;
+  --secondary: #F5A623;
   --success: #27ae60;
   --danger: #e74c3c;
-  --dark: #2c3e50;
+  --dark: #0F2A24;
   --light: #ecf0f1;
 }
 
@@ -34,11 +34,11 @@ body {
 }
 
 .btn-primary {
-  @apply bg-blue-600 text-white hover:bg-blue-700;
+  @apply bg-stellar-500 text-white hover:bg-stellar-600;
 }
 
 .btn-secondary {
-  @apply bg-amber-500 text-white hover:bg-amber-600;
+  @apply bg-stellar-amber text-white hover:brightness-95;
 }
 
 .btn-danger {
@@ -46,7 +46,7 @@ body {
 }
 
 .form-input {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-stellar-500;
 }
 
 .card {

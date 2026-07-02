@@ -66,7 +66,7 @@ export default function OrderHistory() {
                   <td className="px-4 py-3 text-sm font-mono">{order.id.slice(0, 8)}</td>
                   <td className="px-4 py-3">{order.customer_name}</td>
                   <td className="px-4 py-3">
-                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    <span className="px-3 py-1 rounded-full text-sm font-medium bg-stellar-100 text-stellar-800">
                       {order.status}
                     </span>
                   </td>
