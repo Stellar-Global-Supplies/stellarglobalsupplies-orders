@@ -16,7 +16,7 @@ export default function CreateOrder() {
     sku_id: '',
     material_id: '',
     quantity: '',
-    unit: 'Pieces' as const,
+    unit: 'Pieces' as 'Pieces' | 'Kgs',
     sale_cost: '',
   })
 
