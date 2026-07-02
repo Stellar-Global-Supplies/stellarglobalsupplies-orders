@@ -13,12 +13,12 @@ export default function CreateOrder() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [newItem, setNewItem] = useState({
-    sku_id: '',
-    material_id: '',
+    product_type: '',
+    material: '',
     quantity: '',
-    unit: 'Pieces' as const,
+    unit: 'Pieces' as 'Pieces' | 'Kgs',
     sale_cost: '',
-  })
+})
 
   useEffect(() => {
     fetchData()
@@ -36,22 +36,22 @@ export default function CreateOrder() {
   }
 
   const handleAddItem = () => {
-    if (!newItem.sku_id || !newItem.material_id || !newItem.quantity || !newItem.sale_cost) {
+    if (!newItem.sku.id || !newItem.material.id || !newItem.quantity || !newItem.sale_cost) {
       setError('Please fill all item fields')
       return
     }
 
     addItem({
-      sku_id: newItem.sku_id,
-      material_id: newItem.material_id,
+      sku.id: newItem.sku.id,
+      material.id: newItem.material.id,
       quantity: parseFloat(newItem.quantity),
       unit: newItem.unit,
       sale_cost: parseFloat(newItem.sale_cost),
     })
 
     setNewItem({
-      sku_id: '',
-      material_id: '',
+      sku.id: '',
+      material.id: '',
       quantity: '',
       unit: 'Pieces',
       sale_cost: '',
@@ -166,8 +166,8 @@ export default function CreateOrder() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Product SKU *</label>
                 <select
-                  value={newItem.sku_id}
-                  onChange={(e) => setNewItem({ ...newItem, sku_id: e.target.value })}
+                  value={newItem.sku.id}
+                  onChange={(e) => setNewItem({ ...newItem, sku.id: e.target.value })}
                   className="form-input"
                 >
                   <option value="">Select SKU</option>
@@ -179,8 +179,8 @@ export default function CreateOrder() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Material *</label>
                 <select
-                  value={newItem.material_id}
-                  onChange={(e) => setNewItem({ ...newItem, material_id: e.target.value })}
+                  value={newItem.material.id}
+                  onChange={(e) => setNewItem({ ...newItem, material.id: e.target.value })}
                   className="form-input"
                 >
                   <option value="">Select Material</option>
@@ -249,8 +249,8 @@ export default function CreateOrder() {
                 </thead>
                 <tbody>
                   {formData.items.map((item, idx) => {
-                    const sku = skus.find(s => s.id === item.sku_id)
-                    const material = materials.find(m => m.id === item.material_id)
+                    const sku = skus.find(s => s.id === item.sku.id)
+                    const material = materials.find(m => m.id === item.material.id)
                     const subtotal = item.quantity * item.sale_cost
                     return (
                       <tr key={idx} className="border-b">

@@ -18,9 +18,9 @@ export default function OrderHistory() {
       const { data } = await orderAPI.list()
       let sorted = data || []
       if (sortBy === 'recent') {
-        sorted = sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        sorted = sorted.sort((a: Order, b: Order) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       } else {
-        sorted = sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        sorted = sorted.sort((a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       }
       setOrders(sorted)
     } catch (err) {
