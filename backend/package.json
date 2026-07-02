@@ -4,26 +4,28 @@
   "type": "module",
   "scripts": {
     "dev": "node --loader tsx ./src/index.ts",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "deploy:lambda": "zip -r function.zip dist node_modules && aws lambda update-function-code --function-name stellar-orders --zip-file fileb://function.zip",
     "test": "vitest"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "@supabase/supabase-js": "^2.38.4",
-    "@sendgrid/mail": "^8.0.0",
     "cors": "^2.8.5",
+    "date-fns": "^2.30.0",
     "dotenv": "^16.3.1",
-    "uuid": "^9.0.0",
-    "date-fns": "^2.30.0"
+    "express": "^4.18.2",
+    "googleapis": "^144.0.0",
+    "nodemailer": "^6.10.1",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.20",
     "@types/node": "^20.0.0",
+    "@types/nodemailer": "^6.4.15",
     "@types/uuid": "^9.0.2",
-    "typescript": "^5.3.0",
-    "tsx": "^3.14.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
     "vitest": "^0.34.0"
   }
 }
