@@ -1,0 +1,29 @@
+{
+  "name": "stellar-orders-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --loader tsx ./src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "deploy:lambda": "zip -r function.zip dist node_modules && aws lambda update-function-code --function-name stellar-orders --zip-file fileb://function.zip",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "@supabase/supabase-js": "^2.38.4",
+    "@sendgrid/mail": "^8.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "uuid": "^9.0.0",
+    "date-fns": "^2.30.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.20",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.2",
+    "typescript": "^5.3.0",
+    "tsx": "^3.14.0",
+    "vitest": "^0.34.0"
+  }
+}
