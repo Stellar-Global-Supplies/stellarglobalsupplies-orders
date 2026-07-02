@@ -44,6 +44,6 @@ export interface Material {
 
 export interface User {
   id: string
-  email: string
+  email?: string
   user_metadata?: Record<string, any>
 }
