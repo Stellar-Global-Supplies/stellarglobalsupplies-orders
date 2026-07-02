@@ -34,24 +34,6 @@ variable "lambda_runtime" {
   default     = "nodejs18.x"
 }
 
-variable "github_actions_role_name" {
-  description = "IAM role name for GitHub Actions"
-  type        = string
-  default     = "stellar-orders-github-actions"
-}
-
-variable "github_repo_owner" {
-  description = "GitHub repository owner"
-  type        = string
-  default     = "Prasadpb77"
-}
-
-variable "github_repo_name" {
-  description = "GitHub repository name"
-  type        = string
-  default     = "stellarglobalsupplies-orders"
-}
-
 variable "acm_certificate_arn" {
   description = "ARN of the ACM certificate for the domain"
   type        = string

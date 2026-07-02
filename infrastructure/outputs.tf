@@ -28,11 +28,6 @@ output "api_gateway_url" {
   value       = aws_apigatewayv2_api.backend.api_endpoint
 }
 
-output "github_actions_role_arn" {
-  description = "GitHub Actions IAM role ARN"
-  value       = aws_iam_role.github_actions.arn
-}
-
 output "frontend_url" {
   description = "Frontend application URL"
   value       = "https://${var.domain_name}"
