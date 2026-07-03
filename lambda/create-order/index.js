@@ -120,25 +120,30 @@ exports.handler = async (event) => {
   if (missing.length)
     return respond(400, { message: `Missing required fields: ${missing.join(', ')}` });
 
-  // Insert order
-  const { data: order, error: insertErr } = await supabase
-    .from('orders')
-    .insert({
-      customer_name:     customer_name.trim(),
-      phone:             phone.trim(),
-      email:             email.trim().toLowerCase(),
-      product_type,
-      material,
-      quantity:          Number(quantity),
-      unit:              unit || 'Pieces',
-      sale_cost:         Number(sale_cost),
-      payment_status:    payment_status || 'Pending',
-      delivery_timeline: delivery_timeline || null,
-      status:            'Order Received',
-      created_by:        user.id,
-    })
-    .select()
-    .single();
+   // Generate tracking token
+   const { randomUUID } = require('crypto');
+   const trackingToken = randomUUID();
+
+   // Insert order
+   const { data: order, error: insertErr } = await supabase
+     .from('orders')
+     .insert({
+       customer_name:     customer_name.trim(),
+       phone:             phone.trim(),
+       email:             email.trim().toLowerCase(),
+       product_type,
+       material,
+       quantity:          Number(quantity),
+       unit:              unit || 'Pieces',
+       sale_cost:         Number(sale_cost),
+       payment_status:    payment_status || 'Pending',
+       delivery_timeline: delivery_timeline || null,
+       status:            'Order Received',
+       created_by:        user.id,
+       tracking_token:    trackingToken,
+     })
+     .select()
+     .single();
 
   if (insertErr) {
     console.error('Insert error:', insertErr);

@@ -13,6 +13,19 @@ A modern, mobile-responsive web application for managing customer orders with re
 - **WhatsApp Integration**: Send order updates directly to customers via WhatsApp
 - **Email Notifications**: Automated Gmail API-based email notifications at each status change
 
+### Customer Features
+- **Public Order Tracking**: Customers can track their orders using a unique URL without authentication
+- **Mobile-Optimized Tracking Page**: Clean, responsive tracking page for mobile devices
+- **Real-time Status Updates**: Order status updates are reflected immediately on tracking page
+- **Invoice Download**: Customers can download invoices directly from the tracking page (valid for 7 days)
+
+### Invoice Management
+- **S3 Invoice Storage**: Invoices are stored in a dedicated public S3 bucket
+- **Direct Download Links**: Invoices are accessible via public URLs
+- **Email Attachment**: Invoices are attached to delivery emails
+- **7-Day Availability**: Invoices are available for download for 7 days from upload date
+- **After Expiration**: Customers are prompted to contact support for invoice re-download
+
 ### User Interface
 - **Mobile Responsive**: Optimized for phones, tablets, and desktops with hamburger menu
 - **Dark/Light Mode**: Toggle between themes with persistent preference
@@ -68,7 +81,8 @@ stellarglobalsupplies-orders/
 │   │   │   ├── DashboardPage.jsx # Statistics overview
 │   │   │   ├── OrdersPage.jsx  # Order listing with search/filter
 │   │   │   ├── NewOrderPage.jsx # Create new order form
-│   │   │   └── OrderDetailPage.jsx # Order details with actions
+│   │   │   ├── OrderDetailPage.jsx # Order details with actions
+│   │   │   └── TrackOrderPage.jsx # Public order tracking page
 │   │   ├── hooks/
 │   │   │   ├── useAuth.js      # Authentication context
 │   │   │   └── useTheme.js     # Dark/light mode context
@@ -88,12 +102,17 @@ stellarglobalsupplies-orders/
 │   │   └── emailTemplates.js   # HTML email templates
 │   ├── update-order-status/
 │   │   └── index.js            # PATCH /orders/{id}/status - Update status
-│   └── send-notification/
-│       └── index.js            # POST /orders/{id}/notify - Resend email
+│   ├── send-notification/
+│   │   └── index.js            # POST /orders/{id}/notify - Resend email
+│   └── get-order-by-token/
+│       └── index.js            # GET /track/{token} - Public order lookup
 │
 ├── supabase/
 │   └── migrations/
-│       └── 001_create_orders.sql # Database schema
+│       ├── 001_create_orders.sql # Database schema
+│       ├── 002_add_tracking_token.sql # Add tracking token column
+│       └── 003_add_invoice_url.sql # Add invoice URL column
+│       └── 004_add_invoice_timestamp.sql # Add invoice timestamp
 │
 ├── terraform/
 │   └── main.tf                 # AWS infrastructure definition
@@ -154,7 +173,7 @@ npm install
 
 4. **Set up Supabase**
    - Create a new Supabase project
-   - Run the SQL migration in `supabase/migrations/001_create_orders.sql`
+   - Run the SQL migrations in `supabase/migrations/`
    - Create the `top_skus` and `material_split` views
    - Enable Google OAuth in Supabase Auth settings
    - Copy your Supabase URL and anon key
@@ -234,8 +253,9 @@ The application uses these endpoints:
 - `POST /orders` - Create new order
 - `PATCH /orders/{id}/status` - Update order status
 - `PATCH /orders/{id}/delay` - Delay order delivery
-- `POST /orders/{id}/deliver` - Mark order as delivered
+- `POST /orders/{id}/deliver` - Mark order as delivered (with invoice upload)
 - `POST /orders/{id}/notify` - Send email notification
+- `GET /track/{token}` - Public order tracking
 
 ## Order Status Flow
 
@@ -248,7 +268,7 @@ Order Received → Processing → Ready to Dispatch → Delivered
 - **Order Received**: Can advance to "Processing" with payment status update
 - **Processing**: Can advance to "Ready to Dispatch" or delay delivery date
 - **Ready to Dispatch**: Can mark as "Delivered" with invoice upload and payment status
-- **Delivered**: Terminal state
+- **Delivered**: Terminal state - invoice can be downloaded
 
 ## Payment Status
 
@@ -259,6 +279,12 @@ Order Received → Processing → Ready to Dispatch → Delivered
 Payment reminders are automatically included in:
 - Email notifications (if not Paid)
 - WhatsApp messages (if not Paid)
+
+## Invoice Expiration
+
+- **7-Day Window**: Invoices are available for download for 7 days from the upload date
+- **After Expiration**: The tracking page shows a message to contact support
+- **Email**: Invoices are attached to delivery emails regardless of expiration
 
 ## Browser Support
 

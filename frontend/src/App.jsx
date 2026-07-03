@@ -9,6 +9,7 @@ import DashboardPage  from './pages/DashboardPage';
 import OrdersPage     from './pages/OrdersPage';
 import NewOrderPage   from './pages/NewOrderPage';
 import OrderDetailPage from './pages/OrderDetailPage';
+import TrackOrderPage from './pages/TrackOrderPage';
 import './styles/globals.css';
 
 function RequireAuth() {
@@ -65,6 +66,9 @@ export default function App() {
                 <Route path="/new-order"   element={<NewOrderPage />} />
               </Route>
             </Route>
+
+            {/* Public order tracking - no auth required */}
+            <Route path="/track/:token" element={<TrackOrderPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

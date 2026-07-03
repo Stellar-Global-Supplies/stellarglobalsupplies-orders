@@ -124,6 +124,30 @@ resource "aws_acm_certificate_validation" "oms" {
 ##############################################################################
 # S3 — Static frontend bucket
 ##############################################################################
+# ── Invoice bucket (public for invoice downloads) ──
+resource "aws_s3_bucket" "invoices" {
+  bucket = "${local.name_prefix}-invoices-${var.environment}"
+  tags   = local.common_tags
+}
+
+resource "aws_s3_bucket_public_access_block" "invoices" {
+  bucket                  = aws_s3_bucket.invoices.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_cors_configuration" "invoices" {
+  bucket = aws_s3_bucket.invoices.id
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET"]
+    allowed_origins = ["*"]
+    max_age_seconds = 3000
+  }
+}
+
 resource "aws_s3_bucket" "frontend" {
   bucket = "${local.name_prefix}-frontend-${var.environment}"
   tags   = local.common_tags
@@ -336,6 +360,12 @@ resource "aws_cloudwatch_log_group" "api" {
   tags              = local.common_tags
 }
 
+resource "aws_cloudwatch_log_group" "get_order_by_token" {
+  name              = "/aws/lambda/${local.name_prefix}-get-order-by-token"
+  retention_in_days = 1
+  tags              = local.common_tags
+}
+
 ##############################################################################
 # Lambda — shared env
 ##############################################################################
@@ -416,6 +446,30 @@ resource "aws_lambda_function" "send_notification" {
 }
 
 ##############################################################################
+# Lambda — get-order-by-token (public order tracking)
+##############################################################################
+data "archive_file" "get_order_by_token" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/get-order-by-token"
+  output_path = "${local.lambda_zip_dir}/get-order-by-token.zip"
+  depends_on  = [null_resource.lambda_zips_dir]
+}
+
+resource "aws_lambda_function" "get_order_by_token" {
+  filename         = data.archive_file.get_order_by_token.output_path
+  function_name    = "${local.name_prefix}-get-order-by-token"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
+  source_code_hash = data.archive_file.get_order_by_token.output_base64sha256
+  timeout          = 15
+  memory_size      = 128
+  depends_on       = [aws_cloudwatch_log_group.get_order_by_token]
+  environment { variables = local.lambda_base_env }
+  tags = local.common_tags
+}
+
+##############################################################################
 # API Gateway HTTP API
 ##############################################################################
 resource "aws_apigatewayv2_api" "oms" {
@@ -478,11 +532,27 @@ resource "aws_apigatewayv2_integration" "send_notification" {
   payload_format_version = "2.0"
 }
 
+# Integration for public order tracking
+resource "aws_apigatewayv2_integration" "get_order_by_token" {
+  api_id                 = aws_apigatewayv2_api.oms.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.get_order_by_token.invoke_arn
+  integration_method     = "GET"
+  payload_format_version = "2.0"
+}
+
 # Routes
 resource "aws_apigatewayv2_route" "post_orders" {
   api_id    = aws_apigatewayv2_api.oms.id
   route_key = "POST /orders"
   target    = "integrations/${aws_apigatewayv2_integration.create_order.id}"
+}
+
+# Public order tracking route
+resource "aws_apigatewayv2_route" "get_track" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "GET /track/{token}"
+  target    = "integrations/${aws_apigatewayv2_integration.get_order_by_token.id}"
 }
 
 resource "aws_apigatewayv2_route" "patch_status" {
@@ -552,6 +622,14 @@ resource "aws_lambda_permission" "apigw_send_notification" {
   source_arn    = "${aws_apigatewayv2_api.oms.execution_arn}/*/*"
 }
 
+resource "aws_lambda_permission" "apigw_get_order_by_token" {
+  statement_id  = "AllowAPIGWGetOrderByToken"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_order_by_token.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.oms.execution_arn}/*/*"
+}
+
 ##############################################################################
 # SSM — store outputs for GitHub Actions fallback
 ##############################################################################
@@ -588,6 +666,11 @@ output "lambda_function_names" {
   value = [
     aws_lambda_function.create_order.function_name,
     aws_lambda_function.update_status.function_name,
-    aws_lambda_function.send_notification.function_name
+    aws_lambda_function.send_notification.function_name,
+    aws_lambda_function.get_order_by_token.function_name
   ]
+}
+
+output "invoice_bucket_name" {
+  value = aws_s3_bucket.invoices.bucket
 }

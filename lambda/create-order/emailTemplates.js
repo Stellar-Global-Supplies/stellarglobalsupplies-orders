@@ -86,7 +86,7 @@ function baseLayout(content, preheader = '') {
               Stellar Global Supplies — India's Most Reliable Industrial Supply Partner
             </p>
             <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.35);">
-              📞 +91 96376 55556 &nbsp;|&nbsp; 📧 orders@stellarglobalsupplies.com
+              📞 +91 96376 55556 &nbsp;|&nbsp; 📧 stellarglobalsupplies@gmail.com
             </p>
             <p style="margin:8px 0 0;font-size:11px;color:rgba(255,255,255,0.25);">
               © ${new Date().getFullYear()} Stellar Global Supplies. All rights reserved.
@@ -131,6 +131,9 @@ function statusPill(status) {
 function buildOrderConfirmationEmail(order) {
   const orderId = order.id.slice(0, 8).toUpperCase();
   const subject = `Order Confirmed - #${orderId} | Stellar Global Supplies`;
+  const trackingUrl = order.tracking_token 
+    ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
+    : null;
 
   const content = `
     <div style="padding:36px 36px 0;border-bottom:3px solid ${BRAND.teal};">
@@ -168,6 +171,30 @@ function buildOrderConfirmationEmail(order) {
         ` : ''}
       </div>
 
+      ${trackingUrl ? `
+      <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Track Your Order</div>
+        <p style="margin:0 0 12px;font-size:13px;color:${BRAND.text};">
+          Use this link to track your order status anytime:
+        </p>
+        <a href="${trackingUrl}" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;">
+          📍 Track Order #${orderId}
+        </a>
+      </div>
+      ` : ''}
+
+      ${order.invoice_url ? `
+      <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Invoice</div>
+        <p style="margin:0 0 12px;font-size:13px;color:${BRAND.text};">
+          Your invoice is ready for download:
+        </p>
+        <a href="${order.invoice_url}" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;">
+          📥 Download Invoice
+        </a>
+      </div>
+      ` : ''}
+
       <div style="margin-top:28px;text-align:center;">
         <p style="font-size:13px;color:${BRAND.muted};margin:0 0 16px;">Questions about your order?</p>
         <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
@@ -188,7 +215,7 @@ function buildOrderConfirmationEmail(order) {
     </div>
   `;
 
-  const html = baseLayout(content, `Your order #${orderId} has been confirmed. Expected delivery: ${formatDate(order.delivery_timeline)}.`);
+  const html = baseLayout(content, `Your order #${orderId} has been confirmed. Track at: ${trackingUrl || 'N/A'}`);
 
   const text = `
 Stellar Global Supplies — Order Confirmed
@@ -258,6 +285,18 @@ function buildStatusUpdateEmail(order) {
         <p style="margin:0;font-size:13px;color:#B45309;line-height:1.6;">
           <strong>Payment Reminder:</strong> Please pay the remaining amount (if any) before delivery.
         </p>
+      </div>
+      ` : ''}
+
+      ${order.invoice_url ? `
+      <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Invoice</div>
+        <p style="margin:0 0 12px;font-size:13px;color:${BRAND.text};">
+          Your invoice is ready for download:
+        </p>
+        <a href="${order.invoice_url}" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;">
+          📥 Download Invoice
+        </a>
       </div>
       ` : ''}
 

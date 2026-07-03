@@ -25,6 +25,21 @@ export function buildWhatsAppMessage(order) {
     ``,
   ];
 
+  // Add tracking URL
+  if (order.tracking_token) {
+    lines.push(`*Track your order:* https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`);
+    lines.push(``);
+  }
+
+  // Add invoice link if available (with 7-day expiration note)
+  if (order.invoice_url) {
+    const invoiceNote = order.invoice_uploaded_at && new Date(order.invoice_uploaded_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ? `*Invoice (valid for 7 days):* ${order.invoice_url}`
+      : `*Invoice:* Contact us to get your invoice (link expired after 7 days)`;
+    lines.push(invoiceNote);
+    lines.push(``);
+  }
+
   // Add payment reminder if not fully paid
   if (order.payment_status !== 'Paid') {
     lines.push(`*Note:* Please pay the remaining amount (if any) before delivery.`);
@@ -32,6 +47,8 @@ export function buildWhatsAppMessage(order) {
   }
 
   lines.push(`For any queries, call us at +91 96376 55556.`);
+  lines.push(``);
+  lines.push(`Visit: stellarglobalsupplies.com for more products.`);
   lines.push(``);
   lines.push(`Thank you for choosing Stellar Global Supplies!`);
   lines.push(`_India's Most Reliable Industrial Supply Partner_`);

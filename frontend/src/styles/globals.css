@@ -1022,6 +1022,35 @@ tbody td {
   .filters-bar { flex-direction: column; }
 }
 
+/* ── Tracking Page Mobile Optimizations ── */
+@media (max-width: 768px) {
+  .track-page-header {
+    flex-direction: column !important;
+    text-align: center;
+  }
+  .track-page-header > div:last-child {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .track-order-card {
+    margin: 0 8px;
+  }
+  .track-order-card > div {
+    padding: 16px !important;
+  }
+  .track-order-title {
+    font-size: 16px !important;
+  }
+  .track-contact-buttons {
+    flex-direction: column;
+  }
+  .track-contact-buttons a {
+    width: 100% !important;
+  }
+}
+
 /* ── React DatePicker overrides ── */
 .react-datepicker-wrapper { width: 100%; }
 .react-datepicker__input-container input { width: 100%; }

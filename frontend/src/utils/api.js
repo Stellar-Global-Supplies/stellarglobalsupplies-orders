@@ -110,8 +110,25 @@ export async function fetchOrders({ search = '', status = '', page = 1, pageSize
   return { orders: data ?? [], total: count ?? 0 };
 }
 
+// Public order tracking - no auth required
+export async function fetchOrderByTrackingToken(token) {
+  const API_BASE = process.env.REACT_APP_API_BASE_URL;
+  const res = await fetch(`${API_BASE}/track/${token}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Order not found' }));
+    throw new Error(err.message || 'Order not found');
+  }
+  return res.json();
+}
+
+// Fetch order by ID with invoice fields
 export async function fetchOrderById(id) {
-  const { data, error } = await supabase.from('orders').select('*').eq('id', id).single();
+  const { data, error } = await supabase.from('orders').select('*, invoice_url, invoice_uploaded_at').eq('id', id).single();
   if (error) throw error;
   return data;
 }

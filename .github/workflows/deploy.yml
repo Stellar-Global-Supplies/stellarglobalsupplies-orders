@@ -292,6 +292,31 @@ jobs:
           aws ssm put-parameter --name "/stellar-oms/gmail/sender" \
             --value "$GMAIL_SENDER_VAL" --type String --overwrite --no-cli-pager
 
+      # ── get-order-by-token ─────────────────────────────────────────────────────
+      - name: Package & deploy get-order-by-token
+        working-directory: lambda
+        run: |
+          cd get-order-by-token
+          cp -r ../node_modules ./node_modules
+          zip -qr ../get-order-by-token.zip .
+          rm -rf ./node_modules
+          aws lambda update-function-code \
+            --function-name stellar-oms-get-order-by-token \
+            --zip-file fileb://../get-order-by-token.zip \
+            --no-cli-pager
+          aws lambda wait function-updated \
+            --function-name stellar-oms-get-order-by-token
+
+      - name: Store invoice bucket in SSM
+        run: |
+          INVOICE_BUCKET="${{ needs.terraform.outputs.invoice_bucket_name }}"
+          if [ -z "$INVOICE_BUCKET" ]; then
+            INVOICE_BUCKET=$(aws ssm get-parameter --name /stellar-oms/invoice-bucket --query Parameter.Value --output text 2>/dev/null || echo "stellar-oms-invoices-production")
+          fi
+          aws ssm put-parameter --name "/stellar-oms/invoice-bucket" \
+            --value "$INVOICE_BUCKET" --type String --overwrite --no-cli-pager
+          echo "INVOICE_BUCKET=$INVOICE_BUCKET" >> $GITHUB_ENV
+
       - name: Inject Gmail secrets into Lambda environment variables
         env:
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
@@ -300,7 +325,7 @@ jobs:
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
         run: |
           GMAIL_SENDER="${GMAIL_SENDER:-orders@stellarglobalsupplies.com}"
-          for FN in "stellar-oms-create-order" "stellar-oms-update-order-status" "stellar-oms-send-notification"; do
+          for FN in "stellar-oms-create-order" "stellar-oms-update-order-status" "stellar-oms-send-notification" "stellar-oms-get-order-by-token"; do
             echo "→ Injecting Gmail env vars into $FN"
             # Get current env vars, merge Gmail secrets
             CURRENT_ENV_JSON=$(aws lambda get-function-configuration --function-name "$FN" \
@@ -312,7 +337,8 @@ jobs:
               --arg secret "${GMAIL_CLIENT_SECRET}" \
               --arg token "${GMAIL_REFRESH_TOKEN}" \
               --arg sender "${GMAIL_SENDER}" \
-              '. + {GMAIL_CLIENT_ID: $id, GMAIL_CLIENT_SECRET: $secret, GMAIL_REFRESH_TOKEN: $token, GMAIL_SENDER: $sender}')
+              --arg bucket "${{ needs.terraform.outputs.invoice_bucket_name }}" \
+              '. + {GMAIL_CLIENT_ID: $id, GMAIL_CLIENT_SECRET: $secret, GMAIL_REFRESH_TOKEN: $token, GMAIL_SENDER: $sender, INVOICE_BUCKET_NAME: $bucket}')
             # Write full update payload as JSON and use --cli-input-json
             jq -n \
               --arg fn "$FN" \

@@ -291,19 +291,36 @@ export default function OrderDetailPage() {
             WhatsApp Customer
           </button>
 
-          {/* Email */}
-          <button className="btn btn-secondary" onClick={handleSendEmail} disabled={sendingEmail}>
-            {sendingEmail
-              ? <><span className="spinner spinner-dark" /> Sending…</>
-              : <>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                  Send Email
-                </>
-            }
-          </button>
+           {/* Copy Tracking URL */}
+           <button 
+             className="btn btn-secondary" 
+             onClick={() => {
+               const trackingUrl = `${window.location.origin}/track/${order.tracking_token}`;
+               navigator.clipboard.writeText(trackingUrl);
+               toast.success('Tracking URL copied to clipboard!');
+             }}
+             title="Copy public tracking URL"
+           >
+             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07L9.93 7.93A5 5 0 0 0 7.54 10.37"/>
+               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07L14.07 16A5 5 0 0 0 16.46 13.63"/>
+             </svg>
+             Copy Tracking URL
+           </button>
+
+           {/* Email */}
+           <button className="btn btn-secondary" onClick={handleSendEmail} disabled={sendingEmail}>
+             {sendingEmail
+               ? <><span className="spinner spinner-dark" /> Sending…</>
+               : <>
+                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                     <polyline points="22,6 12,13 2,6"/>
+                   </svg>
+                   Send Email
+                 </>
+             }
+           </button>
 
           {/* Advance Status - skip Delivered since we have separate deliver button with invoice */}
           {action && order.status !== 'Ready to Dispatch' && (
@@ -393,6 +410,27 @@ export default function OrderDetailPage() {
                   : '—'}
               />
               <DetailRow label="Current Status" value={<StatusBadge status={order.status} />} />
+              
+              {/* Invoice Download */}
+              {order.invoice_url && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+                  {order.invoice_uploaded_at && new Date(order.invoice_uploaded_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) ? (
+                    <a 
+                      href={order.invoice_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-primary"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      📥 Download Invoice
+                    </a>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Invoice expired (7 days). Contact customer for re-download.
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
