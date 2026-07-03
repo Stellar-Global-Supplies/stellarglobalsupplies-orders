@@ -317,22 +317,22 @@ data "aws_caller_identity" "current" {}
 ##############################################################################
 resource "aws_cloudwatch_log_group" "create_order" {
   name              = "/aws/lambda/${local.name_prefix}-create-order"
-  retention_in_days = 30
+  retention_in_days = 1
   tags              = local.common_tags
 }
 resource "aws_cloudwatch_log_group" "update_status" {
   name              = "/aws/lambda/${local.name_prefix}-update-order-status"
-  retention_in_days = 30
+  retention_in_days = 1
   tags              = local.common_tags
 }
 resource "aws_cloudwatch_log_group" "send_notification" {
   name              = "/aws/lambda/${local.name_prefix}-send-notification"
-  retention_in_days = 30
+  retention_in_days = 1
   tags              = local.common_tags
 }
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/apigateway/${local.name_prefix}"
-  retention_in_days = 30
+  retention_in_days = 1
   tags              = local.common_tags
 }
 
