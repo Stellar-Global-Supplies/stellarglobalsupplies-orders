@@ -26,12 +26,15 @@ export async function createOrder(orderData) {
   return res.json();
 }
 
-export async function updateOrderStatus(orderId, status) {
+export async function updateOrderStatus(orderId, status, paymentStatus) {
   const headers = await authHeaders();
+  const body = { status };
+  if (paymentStatus) body.payment_status = paymentStatus;
+  
   const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
     method: 'PATCH',
     headers,
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Request failed' }));

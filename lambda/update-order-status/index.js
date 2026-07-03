@@ -112,7 +112,7 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return respond(400, { message: 'Invalid JSON' }); }
 
-  const { status } = body;
+  const { status, payment_status } = body;
   if (!status || !VALID_STATUSES.includes(status))
     return respond(400, { message: `Invalid status. Valid values: ${VALID_STATUSES.join(', ')}` });
 
@@ -128,10 +128,20 @@ exports.handler = async (event) => {
       message: `Cannot transition "${current.status}" → "${status}". Expected next: "${expectedNext || 'none — already Delivered'}"`,
     });
 
+  // Build update payload
+  const updatePayload = {
+    status,
+    updated_at: new Date().toISOString(),
+    updated_by: user.id,
+  };
+  if (payment_status && ['Pending', 'Partial', 'Paid'].includes(payment_status)) {
+    updatePayload.payment_status = payment_status;
+  }
+
   // Update
   const { data: updated, error: updateErr } = await supabase
     .from('orders')
-    .update({ status, updated_at: new Date().toISOString(), updated_by: user.id })
+    .update(updatePayload)
     .eq('id', orderId)
     .select()
     .single();

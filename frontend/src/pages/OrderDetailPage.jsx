@@ -43,6 +43,7 @@ export default function OrderDetailPage() {
   const [deliverModal,  setDeliverModal]  = useState(false);
   const [newDeliveryDate, setNewDeliveryDate] = useState(null);
   const [invoiceFile,   setInvoiceFile]   = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('');
 
   const loadOrder = async () => {
     setLoading(true);
@@ -65,7 +66,7 @@ export default function OrderDetailPage() {
     setUpdating(true);
     setConfirmModal(false);
     try {
-      await updateOrderStatus(order.id, next);
+      await updateOrderStatus(order.id, next, paymentStatus || order.payment_status);
       toast.success(`Order moved to "${next}"`);
       await loadOrder();
     } catch (err) {
@@ -152,13 +153,25 @@ export default function OrderDetailPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setConfirmModal(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <p style={{ fontSize: '14px', color: 'var(--neutral-600)', lineHeight: 1.7 }}>
+              <p style={{ fontSize: '14px', color: 'var(--neutral-600)', lineHeight: 1.7, marginBottom: 16 }}>
                 Move order <strong>#{order.id.slice(0, 8).toUpperCase()}</strong> from{' '}
                 <strong>{order.status}</strong> → <strong>{nextStatus}</strong>?
                 <br /><br />
                 This will also trigger an email notification to{' '}
                 <strong>{order.customer_name}</strong> at <strong>{order.email}</strong>.
               </p>
+              <div className="form-group">
+                <label className="form-label">Payment Status</label>
+                <select
+                  className="form-control"
+                  value={paymentStatus || order.payment_status}
+                  onChange={(e) => setPaymentStatus(e.target.value)}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Partial">Partial</option>
+                  <option value="Paid">Paid</option>
+                </select>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setConfirmModal(false)}>Cancel</button>
