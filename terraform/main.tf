@@ -27,7 +27,7 @@ terraform {
   # Configure via GitHub Actions secrets or a *.tfbackend file:
   #   terraform init -backend-config=backend.tfbackend
   backend "s3" {
-    key            = "stellar-global/terraform.tfstate"
+    key            = "stellar-global-orders/terraform.tfstate"
     encrypt        = true
     use_lockfile   = true
   }
