@@ -55,6 +55,10 @@ variable "environment"              { default     = "production" }
 # Set to the ARN of your already-issued ACM cert (us-east-1) — leave empty to create new
 variable "existing_acm_cert_arn"    { default     = "arn:aws:acm:us-east-1:471112840461:certificate/27fa15e5-f9f8-4b5d-a7b2-a6ee4c212ed7" }
 
+# Gmail credentials are NOT managed by Terraform to avoid storing secrets in state.
+# They are stored in SSM Parameter Store and injected into Lambda env vars
+# in the CI/CD pipeline after terraform apply completes.
+
 locals {
   name_prefix = "stellar-oms"
   common_tags = {
@@ -64,6 +68,14 @@ locals {
   }
   # Use existing cert if ARN provided, otherwise use the one we create
   cert_arn = var.existing_acm_cert_arn != "" ? var.existing_acm_cert_arn: aws_acm_certificate_validation.oms[0].certificate_arn
+
+  # Base env vars that do NOT include Gmail secrets (injected post-deploy via CLI)
+  lambda_base_env = {
+    SUPABASE_URL              = var.supabase_url
+    SUPABASE_SERVICE_ROLE_KEY = var.supabase_service_key
+    NODE_ENV                  = "production"
+  }
+  lambda_zip_dir = "${path.module}/.lambda_zips"
 }
 ##############################################################################
 # Existing Route53 hosted zone
@@ -271,6 +283,33 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# Policy to allow Lambda to read Gmail secrets from SSM Parameter Store
+resource "aws_iam_policy" "lambda_ssm" {
+  name        = "${local.name_prefix}-ssm-gmail"
+  description = "Allow Lambda to read Gmail OAuth secrets from SSM"
+  tags        = local.common_tags
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReadGmailSSM"
+        Effect = "Allow"
+        Action = "ssm:GetParameter"
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/stellar-oms/gmail/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_ssm" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.lambda_ssm.arn
+}
+
+data "aws_caller_identity" "current" {}
+
 # No SES policy needed — email is sent via Gmail API using OAuth2 credentials
 
 ##############################################################################
@@ -300,24 +339,6 @@ resource "aws_cloudwatch_log_group" "api" {
 ##############################################################################
 # Lambda — shared env
 ##############################################################################
-variable "gmail_client_id"     { sensitive = true }
-variable "gmail_client_secret" { sensitive = true }
-variable "gmail_refresh_token" { sensitive = true }
-variable "gmail_sender"        { default   = "orders@stellarglobalsupplies.com" }
-
-locals {
-  lambda_env = {
-    SUPABASE_URL              = var.supabase_url
-    SUPABASE_SERVICE_ROLE_KEY = var.supabase_service_key
-    NODE_ENV                  = "production"
-    GMAIL_CLIENT_ID           = var.gmail_client_id
-    GMAIL_CLIENT_SECRET       = var.gmail_client_secret
-    GMAIL_REFRESH_TOKEN       = var.gmail_refresh_token
-    GMAIL_SENDER              = var.gmail_sender
-  }
-  lambda_zip_dir = "${path.module}/.lambda_zips"
-}
-
 resource "null_resource" "lambda_zips_dir" {
   provisioner "local-exec" { command = "mkdir -p ${local.lambda_zip_dir}" }
 }
@@ -342,7 +363,7 @@ resource "aws_lambda_function" "create_order" {
   timeout          = 30
   memory_size      = 256
   depends_on       = [aws_cloudwatch_log_group.create_order]
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_base_env }
   tags = local.common_tags
 }
 
@@ -366,7 +387,7 @@ resource "aws_lambda_function" "update_status" {
   timeout          = 30
   memory_size      = 256
   depends_on       = [aws_cloudwatch_log_group.update_status]
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_base_env }
   tags = local.common_tags
 }
 
@@ -390,7 +411,7 @@ resource "aws_lambda_function" "send_notification" {
   timeout          = 30
   memory_size      = 256
   depends_on       = [aws_cloudwatch_log_group.send_notification]
-  environment { variables = local.lambda_env }
+  environment { variables = local.lambda_base_env }
   tags = local.common_tags
 }
 
@@ -533,3 +554,10 @@ output "cloudfront_id"      { value = aws_cloudfront_distribution.frontend.id }
 output "cloudfront_domain"  { value = aws_cloudfront_distribution.frontend.domain_name }
 output "s3_bucket_name"     { value = aws_s3_bucket.frontend.bucket }
 output "api_gateway_url"    { value = aws_apigatewayv2_api.oms.api_endpoint }
+output "lambda_function_names" {
+  value = [
+    aws_lambda_function.create_order.function_name,
+    aws_lambda_function.update_status.function_name,
+    aws_lambda_function.send_notification.function_name
+  ]
+}

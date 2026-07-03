@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const { signIn } = useAuth();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -14,6 +16,7 @@ export default function LoginPage() {
     try {
       await signIn(email, password);
       toast.success('Welcome back!');
+      navigate('/', { replace: true });
     } catch (err) {
       toast.error(err.message || 'Invalid email or password');
     } finally {

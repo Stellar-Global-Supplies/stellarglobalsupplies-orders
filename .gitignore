@@ -1,7 +1,6 @@
 # Terraform
 terraform/.terraform/
 terraform/*.tfplan
-terraform/.terraform.lock.hcl
 terraform/.lambda_zips/
 
 # Node
