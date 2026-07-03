@@ -23,11 +23,18 @@ export function buildWhatsAppMessage(order) {
     `*Delivery Timeline:* ${deliveryDate}`,
     `*Order Status:* ${order.status}`,
     ``,
-    `For any queries, call us at +91 96376 55556.`,
-    ``,
-    `Thank you for choosing Stellar Global Supplies!`,
-    `_India's Most Reliable Industrial Supply Partner_`,
   ];
+
+  // Add payment reminder if not fully paid
+  if (order.payment_status !== 'Paid') {
+    lines.push(`*Note:* Please pay the remaining amount (if any) before delivery.`);
+    lines.push(``);
+  }
+
+  lines.push(`For any queries, call us at +91 96376 55556.`);
+  lines.push(``);
+  lines.push(`Thank you for choosing Stellar Global Supplies!`);
+  lines.push(`_India's Most Reliable Industrial Supply Partner_`);
 
   const message = encodeURIComponent(lines.join('\n'));
   const phone = order.phone.replace(/\D/g, '');

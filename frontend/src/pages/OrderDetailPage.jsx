@@ -112,15 +112,16 @@ export default function OrderDetailPage() {
   };
 
   const handleDeliver = async () => {
-    if (!invoiceFile) {
-      toast.error('Please attach an invoice');
-      return;
-    }
     setSendingEmail(true);
     setDeliverModal(false);
     try {
-      await deliverOrder(order.id, invoiceFile);
-      toast.success('Order marked as delivered with invoice');
+      // Update status to Delivered with payment status
+      await updateOrderStatus(order.id, 'Delivered', paymentStatus || order.payment_status);
+      // If invoice is attached, upload it (simplified - just mark as delivered for now)
+      if (invoiceFile) {
+        await deliverOrder(order.id, invoiceFile);
+      }
+      toast.success('Order marked as delivered');
       await loadOrder();
     } catch (err) {
       toast.error(err.message || 'Failed to mark as delivered');
@@ -228,14 +229,29 @@ export default function OrderDetailPage() {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '14px', color: 'var(--neutral-600)', lineHeight: 1.7, marginBottom: 16 }}>
-                Attach the invoice for order <strong>#{order.id.slice(0, 8).toUpperCase()}</strong>.
+                Mark order <strong>#{order.id.slice(0, 8).toUpperCase()}</strong> as delivered.
               </p>
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => setInvoiceFile(e.target.files[0])}
-                className="form-control"
-              />
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Payment Status</label>
+                <select
+                  className="form-control"
+                  value={paymentStatus || order.payment_status}
+                  onChange={(e) => setPaymentStatus(e.target.value)}
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="Partial">Partial</option>
+                  <option value="Paid">Paid</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Invoice (Optional)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => setInvoiceFile(e.target.files[0])}
+                  className="form-control"
+                />
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setDeliverModal(false)}>Cancel</button>
