@@ -267,21 +267,30 @@ export default function TrackOrderPage() {
             }}>
               Contact us for any questions about your order.
             </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }} className="track-contact-buttons">
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flexDirection: 'column' }} className="track-contact-buttons">
               <a 
-                href="tel:+919637655556" 
+                href="https://stellarglobalsupplies.com"
                 className="btn btn-primary"
-                style={{ textDecoration: 'none', flex: 1, minWidth: 120 }}
+                style={{ textDecoration: 'none', width: '100%', justifyContent: 'center' }}
               >
-                📞 Call Us
+                🌐 Visit Our Website
               </a>
-              <a 
-                href="https://wa.me/919637655556" 
-                className="btn btn-whatsapp"
-                style={{ textDecoration: 'none', flex: 1, minWidth: 120 }}
-              >
-                💬 WhatsApp
-              </a>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <a 
+                  href="tel:+919637655556" 
+                  className="btn btn-secondary"
+                  style={{ textDecoration: 'none', flex: 1, minWidth: 120 }}
+                >
+                  📞 Call Us
+                </a>
+                <a 
+                  href="https://wa.me/919637655556" 
+                  className="btn btn-whatsapp"
+                  style={{ textDecoration: 'none', flex: 1, minWidth: 120 }}
+                >
+                  💬 WhatsApp
+                </a>
+              </div>
             </div>
           </div>
         </div>

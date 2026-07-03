@@ -86,7 +86,7 @@ function baseLayout(content, preheader = '') {
               Stellar Global Supplies — India's Most Reliable Industrial Supply Partner
             </p>
             <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.35);">
-              📞 +91 96376 55556 &nbsp;|&nbsp; 📧 stellarglobalsupplies@gmail.com
+              📞 +91 96376 55556 &nbsp;|&nbsp; 📧 stellarglobalsupplies@gmail.com &nbsp;|&nbsp; 🌐 stellarglobalsupplies.com
             </p>
             <p style="margin:8px 0 0;font-size:11px;color:rgba(255,255,255,0.25);">
               © ${new Date().getFullYear()} Stellar Global Supplies. All rights reserved.
