@@ -7,24 +7,29 @@
 ##############################################################################
 
 terraform {
-  required_version = ">= 1.5"
+  required_version = ">= 1.5.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 5.50"
     }
     archive = {
       source  = "hashicorp/archive"
       version = "~> 2.4"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 
-  # Remote state — create this bucket once manually before first apply
+  # Configure via GitHub Actions secrets or a *.tfbackend file:
+  #   terraform init -backend-config=backend.tfbackend
   backend "s3" {
-    bucket  = "stellar-oms-tf-state"
-    key     = "oms/terraform.tfstate"
-    region  = "ap-south-1"
-    encrypt = true
+    key            = "stellar-global/terraform.tfstate"
+    encrypt        = true
+    use_lockfile   = true
   }
 }
 
@@ -41,7 +46,7 @@ provider "aws" {
 ##############################################################################
 # Variables
 ##############################################################################
-variable "aws_region"               { default     = "ap-south-1" }
+variable "aws_region"               { default     = "us-east-1" }
 variable "domain_name"              { default     = "orders.stellarglobalsupplies.com" }
 variable "root_domain"              { default     = "stellarglobalsupplies.com" }
 variable "supabase_url"             { sensitive   = true }
