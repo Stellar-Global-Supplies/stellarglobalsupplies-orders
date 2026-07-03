@@ -4,7 +4,7 @@
  * Handles invoice upload to S3
  */
 
-const { createClient } = require('@supabase-supabase-js');
+const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
 const ws               = require('ws');
 const AWS              = require('aws-sdk');
