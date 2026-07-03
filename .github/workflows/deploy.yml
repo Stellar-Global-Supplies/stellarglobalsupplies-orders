@@ -274,14 +274,23 @@ jobs:
       # ── Inject Gmail secrets into Lambda env vars (kept out of Terraform state) ──
       - name: Store Gmail secrets in SSM Parameter Store
         run: |
-          aws ssm put-parameter --name "/stellar-oms/gmail/client-id" \
-            --value "${{ secrets.GMAIL_CLIENT_ID }}" --type SecureString --overwrite --no-cli-pager
-          aws ssm put-parameter --name "/stellar-oms/gmail/client-secret" \
-            --value "${{ secrets.GMAIL_CLIENT_SECRET }}" --type SecureString --overwrite --no-cli-pager
-          aws ssm put-parameter --name "/stellar-oms/gmail/refresh-token" \
-            --value "${{ secrets.GMAIL_REFRESH_TOKEN }}" --type SecureString --overwrite --no-cli-pager
+          # Only create parameters when secrets have values
+          if [ -n "${{ secrets.GMAIL_CLIENT_ID }}" ]; then
+            aws ssm put-parameter --name "/stellar-oms/gmail/client-id" \
+              --value "${{ secrets.GMAIL_CLIENT_ID }}" --type SecureString --overwrite --no-cli-pager
+          fi
+          if [ -n "${{ secrets.GMAIL_CLIENT_SECRET }}" ]; then
+            aws ssm put-parameter --name "/stellar-oms/gmail/client-secret" \
+              --value "${{ secrets.GMAIL_CLIENT_SECRET }}" --type SecureString --overwrite --no-cli-pager
+          fi
+          if [ -n "${{ secrets.GMAIL_REFRESH_TOKEN }}" ]; then
+            aws ssm put-parameter --name "/stellar-oms/gmail/refresh-token" \
+              --value "${{ secrets.GMAIL_REFRESH_TOKEN }}" --type SecureString --overwrite --no-cli-pager
+          fi
+          GMAIL_SENDER_VAL="${{ secrets.GMAIL_SENDER }}"
+          GMAIL_SENDER_VAL="${GMAIL_SENDER_VAL:-orders@stellarglobalsupplies.com}"
           aws ssm put-parameter --name "/stellar-oms/gmail/sender" \
-            --value "${{ secrets.GMAIL_SENDER }}" --type String --overwrite --no-cli-pager
+            --value "$GMAIL_SENDER_VAL" --type String --overwrite --no-cli-pager
 
       - name: Inject Gmail secrets into Lambda environment variables
         run: |
@@ -289,12 +298,28 @@ jobs:
             echo "→ Injecting Gmail env vars into $FN"
             CURRENT_ENV=$(aws lambda get-function-configuration --function-name "$FN" \
               --query 'Environment.Variables' --output json --no-cli-pager)
-            UPDATED_ENV=$(echo "$CURRENT_ENV" | jq \
-              --arg id "${{ secrets.GMAIL_CLIENT_ID }}" \
-              --arg secret "${{ secrets.GMAIL_CLIENT_SECRET }}" \
-              --arg token "${{ secrets.GMAIL_REFRESH_TOKEN }}" \
-              --arg sender "${{ secrets.GMAIL_SENDER }}" \
-              '. + {GMAIL_CLIENT_ID: $id, GMAIL_CLIENT_SECRET: $secret, GMAIL_REFRESH_TOKEN: $token, GMAIL_SENDER: $sender}')
+            
+            # Build jq args only for non-empty secrets
+            JQ_FILTER='. + {}'
+            JQ_ARGS=""
+            if [ -n "${{ secrets.GMAIL_CLIENT_ID }}" ]; then
+              JQ_FILTER='. + {GMAIL_CLIENT_ID: $id}'
+              JQ_ARGS="$JQ_ARGS --arg id '${{ secrets.GMAIL_CLIENT_ID }}'"
+            fi
+            if [ -n "${{ secrets.GMAIL_CLIENT_SECRET }}" ]; then
+              JQ_FILTER="$JQ_FILTER"' | . + {GMAIL_CLIENT_SECRET: $secret}'
+              JQ_ARGS="$JQ_ARGS --arg secret '${{ secrets.GMAIL_CLIENT_SECRET }}'"
+            fi
+            if [ -n "${{ secrets.GMAIL_REFRESH_TOKEN }}" ]; then
+              JQ_FILTER="$JQ_FILTER"' | . + {GMAIL_REFRESH_TOKEN: $token}'
+              JQ_ARGS="$JQ_ARGS --arg token '${{ secrets.GMAIL_REFRESH_TOKEN }}'"
+            fi
+            GMAIL_SENDER_VAL="${{ secrets.GMAIL_SENDER }}"
+            GMAIL_SENDER_VAL="${GMAIL_SENDER_VAL:-orders@stellarglobalsupplies.com}"
+            JQ_FILTER="$JQ_FILTER"' | . + {GMAIL_SENDER: $sender}'
+            JQ_ARGS="$JQ_ARGS --arg sender '$GMAIL_SENDER_VAL'"
+            
+            UPDATED_ENV=$(echo "$CURRENT_ENV" | jq $JQ_ARGS "$JQ_FILTER")
             aws lambda update-function-configuration --function-name "$FN" \
               --environment "Variables=${UPDATED_ENV}" --no-cli-pager
             echo "✓ $FN updated"
