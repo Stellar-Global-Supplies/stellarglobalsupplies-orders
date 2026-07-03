@@ -15,20 +15,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Fetch product types from top_sku VIEW — column: skus
+// Fetch product types from top_sku VIEW — column: sku
 export const fetchProductTypes = async () => {
   const { data, error } = await supabase
     .from('top_sku')
-    .select('skus')
-    .order('skus');
+    .select('sku')
+    .order('sku');
   if (error) throw error;
-  return data?.map((r) => r.skus).filter(Boolean) ?? [];
+  return data?.map((r) => r.sku).filter(Boolean) ?? [];
 };
 
-// Fetch materials from material_spilt VIEW — column: material_type
+// Fetch materials from material_split VIEW — column: material_type
 export const fetchMaterials = async () => {
   const { data, error } = await supabase
-    .from('material_spilt')
+    .from('material_split')
     .select('material_type')
     .order('material_type');
   if (error) throw error;
