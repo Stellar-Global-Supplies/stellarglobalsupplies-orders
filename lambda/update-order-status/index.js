@@ -17,7 +17,7 @@ const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
 catch { emailTemplates = require('../create-order/emailTemplates'); }
-const { buildStatusUpdateEmail } = emailTemplates;
+const { buildStatusUpdateEmail, buildDelayNotificationEmail } = emailTemplates;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -196,14 +196,26 @@ exports.handler = async (event) => {
 
   const path = event.path || event.rawPath || '';
 
-  // Handle delay endpoint
-  if (path.includes('/delay')) {
+    // Handle delay endpoint
+    if (path.includes('/delay')) {
     let body = {};
     try { body = JSON.parse(event.body || '{}'); }
     catch { return respond(400, { message: 'Invalid JSON' }); }
 
     const { delivery_timeline } = body;
     if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
+
+    // First fetch the current order to get customer email
+    const { data: currentOrder, error: fetchErr } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+
+    if (fetchErr || !currentOrder) {
+      console.error('Fetch error:', fetchErr);
+      return respond(404, { message: 'Order not found' });
+    }
 
     const { data: updated, error: updateErr } = await supabase
       .from('orders')
@@ -220,6 +232,12 @@ exports.handler = async (event) => {
       console.error('Delay error:', updateErr);
       return respond(500, { message: 'Failed to delay order' });
     }
+
+    // Send delay notification email
+    try {
+      const { subject, html, text } = buildDelayNotificationEmail(updated);
+      await sendEmail({ to: updated.email, subject, html, text });
+    } catch (e) { console.error('Delay email error (non-fatal):', e.message); }
 
     return respond(200, updated);
   }

@@ -241,6 +241,101 @@ Contact us: +91 96376 55556
 }
 
 // ── Status Update Email ───────────────────────────────────────────────────────
+// ── Delay Notification Email ───────────────────────────────────────────────────
+function buildDelayNotificationEmail(order) {
+  const orderId = order.id.slice(0, 8).toUpperCase();
+  const trackingUrl = order.tracking_token 
+    ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
+    : null;
+  const subject = `Order Delay Notice - #${orderId} | Stellar Global Supplies`;
+
+  const content = `
+    <div style="padding:36px 36px 0;border-bottom:3px solid ${BRAND.teal};">
+      <div style="background:${BRAND.light};border-radius:10px;padding:20px 24px;display:inline-block;margin-bottom:24px;">
+        <span style="font-size:28px;">⏳</span>
+        <span style="font-size:17px;font-weight:700;color:${BRAND.teal};margin-left:10px;">Delivery Delayed</span>
+      </div>
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:${BRAND.navy};">
+        Order Update, ${order.customer_name}
+      </h2>
+      <p style="margin:0 0 20px;font-size:14px;color:${BRAND.muted};line-height:1.7;">
+        We wanted to inform you that your order delivery has been delayed. We apologize for any inconvenience 
+        and are working to get your order to you as soon as possible.
+      </p>
+    </div>
+
+    <div style="padding:28px 36px;">
+      <div style="background:#FFFBEB;border:1.5px solid #F59E0B;border-radius:10px;padding:18px 20px;margin-bottom:24px;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+          New Delivery Date
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#B45309;">
+          ${formatDate(order.delivery_timeline)}
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:13px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Order Details</div>
+        ${orderDetailsTable(order)}
+      </div>
+
+      ${trackingUrl ? `
+      <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Track Your Order</div>
+        <p style="margin:0 0 12px;font-size:13px;color:${BRAND.text};">
+          Use this link to track your order status anytime:
+        </p>
+        <a href="${trackingUrl}" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;">
+          📍 Track Order #${orderId}
+        </a>
+      </div>
+      ` : ''}
+
+      <div style="margin-top:28px;text-align:center;">
+        <p style="font-size:13px;color:${BRAND.muted};margin:0 0 16px;">Questions about your order?</p>
+        <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+          <tr>
+            <td style="padding-right:10px;">
+              <a href="tel:+919637655556" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:11px 22px;border-radius:7px;font-size:13px;font-weight:700;">
+                📞 Call Us
+              </a>
+            </td>
+            <td>
+              <a href="https://wa.me/919637655556" style="display:inline-block;background:#25D366;color:#fff;text-decoration:none;padding:11px 22px;border-radius:7px;font-size:13px;font-weight:700;">
+                💬 WhatsApp
+              </a>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  `;
+
+  const html = baseLayout(content, `Your order #${orderId} delivery has been delayed. New date: ${formatDate(order.delivery_timeline)}`);
+
+  const text = `
+Stellar Global Supplies — Order Delay Notice
+
+Hi ${order.customer_name},
+
+Your order #${orderId} delivery has been delayed.
+
+New Delivery Date: ${formatDate(order.delivery_timeline)}
+
+Order Details:
+- Product: ${order.product_type}
+- Material: ${order.material}
+- Quantity: ${order.quantity} ${order.unit}
+- Sale Cost: ${formatCurrency(order.sale_cost)}
+
+We apologize for any inconvenience.
+
+Contact us: +91 96376 55556
+  `.trim();
+
+  return { subject, html, text };
+}
+
 function buildStatusUpdateEmail(order) {
   const orderId = order.id.slice(0, 8).toUpperCase();
   const s = STATUS_COLORS[order.status] || STATUS_COLORS['Order Received'];
@@ -361,4 +456,4 @@ Contact us: +91 96376 55556
   return { subject, html, text };
 }
 
-module.exports = { buildOrderConfirmationEmail, buildStatusUpdateEmail };
+module.exports = { buildOrderConfirmationEmail, buildStatusUpdateEmail, buildDelayNotificationEmail };
