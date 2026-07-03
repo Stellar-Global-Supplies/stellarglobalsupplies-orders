@@ -537,7 +537,6 @@ resource "aws_apigatewayv2_integration" "get_order_by_token" {
   api_id                 = aws_apigatewayv2_api.oms.id
   integration_type       = "AWS_PROXY"
   integration_uri        = aws_lambda_function.get_order_by_token.invoke_arn
-  integration_method     = "GET"
   payload_format_version = "2.0"
 }
 
