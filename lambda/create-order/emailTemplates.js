@@ -130,7 +130,7 @@ function statusPill(status) {
 // ── Order Confirmation (on creation) ─────────────────────────────────────────
 function buildOrderConfirmationEmail(order) {
   const orderId = order.id.slice(0, 8).toUpperCase();
-  const subject = `Order Confirmed — #${orderId} | Stellar Global Supplies`;
+  const subject = `Order Confirmed - #${orderId} | Stellar Global Supplies`;
 
   const content = `
     <div style="padding:36px 36px 0;border-bottom:3px solid ${BRAND.teal};">
@@ -220,7 +220,7 @@ function buildStatusUpdateEmail(order) {
   };
 
   const info = statusMessages[order.status] || { emoji: '📋', msg: 'Your order status has been updated.' };
-  const subject = `Order Update: ${order.status} — #${orderId} | Stellar Global Supplies`;
+  const subject = `Order Update: ${order.status} - #${orderId} | Stellar Global Supplies`;
 
   const content = `
     <div style="padding:36px 36px 0;border-bottom:3px solid ${s.text};">

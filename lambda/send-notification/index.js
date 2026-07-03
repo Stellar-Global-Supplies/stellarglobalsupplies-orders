@@ -63,7 +63,7 @@ function buildRawMessage({ to, subject, html, text, from }) {
 
 async function sendEmail({ to, subject, html, text }) {
   const gmail = buildGmailClient();
-  const from  = `Stellar Global Supplies <${process.env.GMAIL_SENDER}>`;
+  const from  = `Stellar Global Supplies <stellarglobalsupplies@gmail.com>`;
   await gmail.users.messages.send({
     userId:      'me',
     requestBody: { raw: buildRawMessage({ to, subject, html, text, from }) },
