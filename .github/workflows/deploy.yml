@@ -215,7 +215,7 @@ jobs:
 
       - name: Install Lambda dependencies
         working-directory: lambda
-        run: npm ci --omit=dev
+        run: npm install --omit=dev
 
       # ── create-order ──────────────────────────────────────────────────────
       - name: Package & deploy create-order
