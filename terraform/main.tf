@@ -64,7 +64,7 @@ locals {
   }
   # Use existing cert if ARN provided, otherwise use the one we create
   cert_arn = var.existing_acm_cert_arn != "" ? var.existing_acm_cert_arn: aws_acm_certificate_validation.oms[0].certificate_arn
-
+}
 ##############################################################################
 # Existing Route53 hosted zone
 ##############################################################################
@@ -210,16 +210,12 @@ resource "aws_cloudfront_distribution" "frontend" {
     error_caching_min_ttl = 0
   }
 
-  restrictions { 
-    geo_restriction { restriction_type = "none" } }
+  restrictions {
+    geo_restriction { restriction_type = "none" }
+  }
 
   viewer_certificate {
     acm_certificate_arn      = local.cert_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
-  }
-  viewer_certificate {
-    acm_certificate_arn      = var.acm_certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
@@ -258,7 +254,15 @@ resource "aws_iam_role" "lambda" {
   tags = local.common_tags
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{ Effect = "Allow" Action = "sts:AssumeRole" Principal = { Service = "lambda.amazonaws.com" } }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "sts:AssumeRole"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
   })
 }
 

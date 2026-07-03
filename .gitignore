@@ -1,0 +1,17 @@
+# Terraform
+terraform/.terraform/
+terraform/*.tfplan
+terraform/.terraform.lock.hcl
+terraform/.lambda_zips/
+
+# Node
+node_modules/
+frontend/node_modules/
+lambda/node_modules/
+
+# Build artifacts
+frontend/build/
+lambda/*.zip
+
+# OS
+.DS_Store
