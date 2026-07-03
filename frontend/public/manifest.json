@@ -1,0 +1,9 @@
+{
+  "short_name": "Stellar OMS",
+  "name": "Stellar Global Supplies — Order Management",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0D1F2D",
+  "background_color": "#0D1F2D"
+}

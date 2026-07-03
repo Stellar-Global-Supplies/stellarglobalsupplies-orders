@@ -1,0 +1,353 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import toast from 'react-hot-toast';
+import { fetchProductTypes, fetchMaterials } from '../utils/supabase';
+import { createOrder } from '../utils/api';
+
+const UNITS           = ['Pieces', 'Kgs'];
+const PAYMENT_OPTIONS = ['Pending', 'Paid', 'Partial'];
+
+function Field({ label, required, children, error }) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        {label}
+        {required && <span className="required">*</span>}
+      </label>
+      {children}
+      {error && <span className="form-error">{error}</span>}
+    </div>
+  );
+}
+
+const EMPTY_FORM = {
+  customer_name:     '',
+  phone:             '',
+  email:             '',
+  product_type:      '',
+  material:          '',
+  quantity:          '',
+  unit:              'Pieces',
+  sale_cost:         '',
+  payment_status:    'Pending',
+  delivery_timeline: null,
+};
+
+export default function NewOrderPage() {
+  const navigate = useNavigate();
+
+  const [skus,      setSkus]      = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [skuLoading,  setSkuLoading]  = useState(true);
+  const [matLoading,  setMatLoading]  = useState(true);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [form,   setForm]   = useState(EMPTY_FORM);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    // top_sku view → skus column
+    fetchProductTypes()
+      .then(setSkus)
+      .catch(() => toast.error('Failed to load product types'))
+      .finally(() => setSkuLoading(false));
+
+    // material_spilt view → material_type column
+    fetchMaterials()
+      .then(setMaterials)
+      .catch(() => toast.error('Failed to load materials'))
+      .finally(() => setMatLoading(false));
+  }, []);
+
+  const set = (key) => (e) =>
+    setForm((f) => ({ ...f, [key]: e?.target ? e.target.value : e }));
+
+  const clearError = (key) =>
+    setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+
+  const validate = () => {
+    const errs = {};
+    if (!form.customer_name.trim()) errs.customer_name = 'Customer name is required';
+    if (!form.phone.trim())         errs.phone         = 'Phone number is required';
+    if (!form.email.trim())         errs.email         = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email address';
+    if (!form.product_type)         errs.product_type  = 'Select a product type';
+    if (!form.material)             errs.material      = 'Select a material';
+    if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) <= 0)
+      errs.quantity  = 'Enter a valid quantity';
+    if (!form.sale_cost || isNaN(form.sale_cost) || Number(form.sale_cost) <= 0)
+      errs.sale_cost = 'Enter a valid sale cost';
+    if (!form.delivery_timeline)    errs.delivery_timeline = 'Select a delivery date';
+    return errs;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        ...form,
+        quantity:          Number(form.quantity),
+        sale_cost:         Number(form.sale_cost),
+        delivery_timeline: form.delivery_timeline?.toISOString().split('T')[0],
+        status:            'Order Received',
+      };
+      const result = await createOrder(payload);
+      toast.success('Order created successfully!');
+      navigate(`/orders/${result.id}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to create order');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <div className="page-header-left">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/orders')} style={{ padding: '6px 8px' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <div>
+              <h1 className="page-title">New Order</h1>
+              <p className="page-subtitle">Fill in all details — status is automatically set to Order Received</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="page-body">
+        <form onSubmit={handleSubmit} noValidate>
+
+          {/* ── Section 1: Customer ── */}
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-header">
+              <span className="card-title">
+                <span style={{ color: 'var(--brand-teal)', marginRight: 8 }}>①</span>
+                Customer Information
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+                <Field label="Customer Name" required error={errors.customer_name}>
+                  <input
+                    className={`form-control${errors.customer_name ? ' error' : ''}`}
+                    placeholder="e.g. Rahul Sharma"
+                    value={form.customer_name}
+                    onChange={(e) => { set('customer_name')(e); clearError('customer_name'); }}
+                  />
+                </Field>
+
+                <Field label="Phone Number" required error={errors.phone}>
+                  <input
+                    className={`form-control${errors.phone ? ' error' : ''}`}
+                    placeholder="e.g. 9876543210"
+                    value={form.phone}
+                    onChange={(e) => { set('phone')(e); clearError('phone'); }}
+                    type="tel"
+                  />
+                </Field>
+
+                <Field label="Email Address" required error={errors.email}>
+                  <input
+                    className={`form-control${errors.email ? ' error' : ''}`}
+                    placeholder="customer@example.com"
+                    value={form.email}
+                    onChange={(e) => { set('email')(e); clearError('email'); }}
+                    type="email"
+                  />
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 2: Order Details ── */}
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-header">
+              <span className="card-title">
+                <span style={{ color: 'var(--brand-teal)', marginRight: 8 }}>②</span>
+                Order Details
+              </span>
+            </div>
+            <div className="card-body">
+              <div className="form-grid">
+
+                {/* Product Type — from top_sku view (skus column) */}
+                <Field label="Product Type" required error={errors.product_type}>
+                  <select
+                    className={`form-control${errors.product_type ? ' error' : ''}`}
+                    value={form.product_type}
+                    onChange={(e) => { set('product_type')(e); clearError('product_type'); }}
+                    disabled={skuLoading}
+                  >
+                    <option value="">{skuLoading ? 'Loading…' : 'Select product type…'}</option>
+                    {skus.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+
+                {/* Material — from material_spilt view (material_type column) */}
+                <Field label="Material" required error={errors.material}>
+                  <select
+                    className={`form-control${errors.material ? ' error' : ''}`}
+                    value={form.material}
+                    onChange={(e) => { set('material')(e); clearError('material'); }}
+                    disabled={matLoading}
+                  >
+                    <option value="">{matLoading ? 'Loading…' : 'Select material…'}</option>
+                    {materials.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </Field>
+
+                {/* Quantity + Unit */}
+                <Field label="Quantity" required error={errors.quantity}>
+                  <div className="input-group">
+                    <input
+                      className={`form-control${errors.quantity ? ' error' : ''}`}
+                      placeholder="0"
+                      value={form.quantity}
+                      onChange={(e) => { set('quantity')(e); clearError('quantity'); }}
+                      type="number"
+                      min="0"
+                      step="any"
+                    />
+                    <select
+                      style={{
+                        border: '1.5px solid var(--neutral-200)',
+                        borderLeft: 'none',
+                        borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+                        padding: '0 12px',
+                        background: 'var(--neutral-100)',
+                        fontSize: 13,
+                        color: 'var(--neutral-600)',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        outline: 'none',
+                        minWidth: 80,
+                      }}
+                      value={form.unit}
+                      onChange={set('unit')}
+                    >
+                      {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </Field>
+
+                {/* Sale Cost */}
+                <Field label="Sale Cost (₹)" required error={errors.sale_cost}>
+                  <div className="input-group">
+                    <span
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        padding: '0 12px',
+                        background: 'var(--neutral-100)',
+                        border: '1.5px solid var(--neutral-200)',
+                        borderRight: 'none',
+                        borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
+                        fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
+                      }}
+                    >₹</span>
+                    <input
+                      className={`form-control${errors.sale_cost ? ' error' : ''}`}
+                      style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none' }}
+                      placeholder="0.00"
+                      value={form.sale_cost}
+                      onChange={(e) => { set('sale_cost')(e); clearError('sale_cost'); }}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </Field>
+
+                {/* Payment Status */}
+                <Field label="Payment Status" required>
+                  <select
+                    className="form-control"
+                    value={form.payment_status}
+                    onChange={set('payment_status')}
+                  >
+                    {PAYMENT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+
+                {/* Delivery Timeline */}
+                <Field label="Delivery Timeline" required error={errors.delivery_timeline}>
+                  <DatePicker
+                    selected={form.delivery_timeline}
+                    onChange={(date) => {
+                      setForm((f) => ({ ...f, delivery_timeline: date }));
+                      clearError('delivery_timeline');
+                    }}
+                    minDate={new Date()}
+                    dateFormat="dd MMM yyyy"
+                    placeholderText="Select delivery date"
+                    className={`form-control${errors.delivery_timeline ? ' error' : ''}`}
+                    popperPlacement="bottom-start"
+                    showMonthDropdown
+                    showYearDropdown
+                    dropdownMode="select"
+                  />
+                </Field>
+              </div>
+
+              {/* Auto-status notice */}
+              <div style={{
+                marginTop: 20,
+                padding: '12px 16px',
+                background: 'var(--brand-teal-light)',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid rgba(0,185,142,.25)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                fontSize: 13,
+                color: 'var(--brand-teal-dark)',
+                fontWeight: 500,
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+                </svg>
+                Order status will automatically be set to <strong style={{ marginLeft: 4 }}>Order Received</strong> and a confirmation email will be sent to the customer.
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-lg"
+              onClick={() => navigate('/orders')}
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary btn-lg"
+              disabled={submitting}
+            >
+              {submitting
+                ? <><span className="spinner" /> Creating Order…</>
+                : <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Create Order
+                  </>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+}
