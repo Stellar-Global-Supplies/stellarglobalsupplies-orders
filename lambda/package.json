@@ -5,6 +5,7 @@
   "private": true,
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
+    "aws-sdk": "^2.1600.0",
     "googleapis": "^140.0.0",
     "ws": "^8.16.0"
   }
