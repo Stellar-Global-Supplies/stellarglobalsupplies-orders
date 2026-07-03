@@ -1051,6 +1051,71 @@ tbody td {
   }
 }
 
+/* ── Dynamic Island / Notch Support ── */
+@supports (padding: max(0px)) {
+  .app-shell {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+  
+  .mobile-header {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+}
+
+/* ── Web App / Mobile Viewport Fixes ── */
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Ensure content doesn't overflow on mobile */
+.main-content {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Fix for mobile scroll issues */
+@media (max-width: 768px) {
+  .page-body {
+    padding: 16px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  /* Prevent horizontal scroll on small screens */
+  .page-header,
+  .filters-bar,
+  .stats-grid,
+  .order-table-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
 /* ── React DatePicker overrides ── */
 .react-datepicker-wrapper { width: 100%; }
 .react-datepicker__input-container input { width: 100%; }
