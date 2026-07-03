@@ -151,8 +151,10 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Terraform Init
-        run: terraform init \
+      - name: Terraform init
+        working-directory: terraform
+        run: |
+          terraform init \
             -backend-config="bucket=${{ secrets.TF_BACKEND_BUCKET }}" \
             -backend-config="region=${{ secrets.TF_BACKEND_REGION }}" \
             -backend-config="dynamodb_table=${{ secrets.TF_BACKEND_DYNAMODB_TABLE }}" \
@@ -164,6 +166,7 @@ jobs:
         run: terraform validate -no-color
 
       - name: Terraform Plan
+        working-directory: terraform
         run: |
           terraform plan -no-color \
             -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
@@ -172,6 +175,7 @@ jobs:
             -out=tfplan 2>&1 | tee plan.txt
 
       - name: Terraform Apply
+        working-directory: terraform
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve tfplan
 
