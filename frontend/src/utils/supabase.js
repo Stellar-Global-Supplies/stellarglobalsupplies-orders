@@ -15,10 +15,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// Fetch product types from top_sku VIEW — column: sku
+// Fetch product types from top_skus VIEW — column: sku
 export const fetchProductTypes = async () => {
   const { data, error } = await supabase
-    .from('top_sku')
+    .from('top_skus')
     .select('sku')
     .order('sku');
   if (error) throw error;
