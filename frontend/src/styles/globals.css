@@ -600,6 +600,7 @@ thead th {
 tbody tr {
   border-bottom: 1px solid var(--neutral-100);
   transition: background .1s;
+  background: var(--bg-card);
 }
 
 tbody tr:last-child { border-bottom: none; }
@@ -609,6 +610,7 @@ tbody td {
   padding: 13px 16px;
   color: var(--text-primary);
   vertical-align: middle;
+  background: var(--bg-card);
 }
 
 /* ── Stats cards ── */
