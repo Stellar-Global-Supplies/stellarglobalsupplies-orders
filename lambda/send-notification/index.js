@@ -5,6 +5,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
+const ws               = require('ws');
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
@@ -13,7 +14,12 @@ const { buildOrderConfirmationEmail, buildStatusUpdateEmail } = emailTemplates;
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  {
+    realtime: {
+      transport: ws,
+    },
+  }
 );
 
 function buildGmailClient() {
