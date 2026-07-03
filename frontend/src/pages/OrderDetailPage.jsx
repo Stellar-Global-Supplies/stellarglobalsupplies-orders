@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 import toast from 'react-hot-toast';
-import { fetchOrderById, updateOrderStatus, sendEmailNotification } from '../utils/api';
+import { fetchOrderById, updateOrderStatus, sendEmailNotification, delayOrder, deliverOrder } from '../utils/api';
 import { StatusBadge, PaymentBadge } from '../components/StatusBadge';
 import OrderTimeline, { STATUS_ORDER } from '../components/OrderTimeline';
 import { buildWhatsAppMessage } from '../utils/whatsapp';
@@ -37,6 +39,10 @@ export default function OrderDetailPage() {
   const [updatingStatus, setUpdating]     = useState(false);
   const [sendingEmail,  setSendingEmail]  = useState(false);
   const [confirmModal,  setConfirmModal]  = useState(false);
+  const [delayModal,    setDelayModal]    = useState(false);
+  const [deliverModal,  setDeliverModal]  = useState(false);
+  const [newDeliveryDate, setNewDeliveryDate] = useState(null);
+  const [invoiceFile,   setInvoiceFile]   = useState(null);
 
   const loadOrder = async () => {
     setLoading(true);
@@ -86,6 +92,42 @@ export default function OrderDetailPage() {
     window.open(url, '_blank');
   };
 
+  const handleDelay = async () => {
+    if (!newDeliveryDate) {
+      toast.error('Please select a new delivery date');
+      return;
+    }
+    setUpdating(true);
+    setDelayModal(false);
+    try {
+      await delayOrder(order.id, newDeliveryDate.toISOString().split('T')[0]);
+      toast.success('Delivery date updated');
+      await loadOrder();
+    } catch (err) {
+      toast.error(err.message || 'Failed to delay order');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDeliver = async () => {
+    if (!invoiceFile) {
+      toast.error('Please attach an invoice');
+      return;
+    }
+    setSendingEmail(true);
+    setDeliverModal(false);
+    try {
+      await deliverOrder(order.id, invoiceFile);
+      toast.success('Order marked as delivered with invoice');
+      await loadOrder();
+    } catch (err) {
+      toast.error(err.message || 'Failed to mark as delivered');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
@@ -122,6 +164,70 @@ export default function OrderDetailPage() {
               <button className="btn btn-secondary" onClick={() => setConfirmModal(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleStatusUpdate} disabled={updatingStatus}>
                 {updatingStatus ? <><span className="spinner" /> Updating…</> : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delay Order Modal */}
+      {delayModal && (
+        <div className="modal-overlay" onClick={() => setDelayModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <span className="modal-title">Delay Order</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDelayModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--neutral-600)', lineHeight: 1.7, marginBottom: 16 }}>
+                Select a new delivery date for order <strong>#{order.id.slice(0, 8).toUpperCase()}</strong>.
+              </p>
+              <DatePicker
+                selected={newDeliveryDate}
+                onChange={setNewDeliveryDate}
+                minDate={new Date()}
+                dateFormat="dd MMM yyyy"
+                placeholderText="Select new delivery date"
+                className="form-control"
+                popperPlacement="bottom-start"
+                showMonthDropdown
+                showYearDropdown
+                dropdownMode="select"
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDelayModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleDelay} disabled={updatingStatus}>
+                {updatingStatus ? <><span className="spinner" /> Updating…</> : 'Update Date'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deliver Order Modal */}
+      {deliverModal && (
+        <div className="modal-overlay" onClick={() => setDeliverModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <span className="modal-title">Mark as Delivered</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDeliverModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '14px', color: 'var(--neutral-600)', lineHeight: 1.7, marginBottom: 16 }}>
+                Attach the invoice for order <strong>#{order.id.slice(0, 8).toUpperCase()}</strong>.
+              </p>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => setInvoiceFile(e.target.files[0])}
+                className="form-control"
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setDeliverModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleDeliver} disabled={sendingEmail}>
+                {sendingEmail ? <><span className="spinner" /> Processing…</> : 'Mark as Delivered'}
               </button>
             </div>
           </div>
@@ -181,6 +287,34 @@ export default function OrderDetailPage() {
                 ? <><span className="spinner" /> Updating…</>
                 : <>{action.icon} {action.label}</>
               }
+            </button>
+          )}
+
+          {/* Delay Order - only in Processing */}
+          {order.status === 'Processing' && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => { setNewDeliveryDate(new Date(order.delivery_timeline)); setDelayModal(true); }}
+              disabled={updatingStatus}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              Delay Order
+            </button>
+          )}
+
+          {/* Mark as Delivered - with invoice */}
+          {order.status === 'Ready to Dispatch' && (
+            <button
+              className="btn btn-primary"
+              onClick={() => setDeliverModal(true)}
+              disabled={updatingStatus}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Mark as Delivered
             </button>
           )}
 

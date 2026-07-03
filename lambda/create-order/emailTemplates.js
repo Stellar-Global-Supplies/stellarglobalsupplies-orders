@@ -161,6 +161,11 @@ function buildOrderConfirmationEmail(order) {
           We'll notify you as your order progresses. Expected delivery by
           <strong style="color:${BRAND.navy};">${formatDate(order.delivery_timeline)}</strong>.
         </p>
+        ${order.payment_status !== 'Paid' ? `
+        <p style="margin:8px 0 0;font-size:13px;color:#B45309;line-height:1.6;">
+          <strong>Note:</strong> Please pay the remaining amount (if any) before delivery.
+        </p>
+        ` : ''}
       </div>
 
       <div style="margin-top:28px;text-align:center;">
@@ -247,6 +252,14 @@ function buildStatusUpdateEmail(order) {
         <div style="font-size:13px;font-weight:700;color:${BRAND.navy};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Order Details</div>
         ${orderDetailsTable(order)}
       </div>
+
+      ${order.payment_status !== 'Paid' ? `
+      <div style="margin-top:20px;padding:14px 18px;background:#FFFBEB;border:1px solid #F59E0B;border-radius:8px;">
+        <p style="margin:0;font-size:13px;color:#B45309;line-height:1.6;">
+          <strong>Payment Reminder:</strong> Please pay the remaining amount (if any) before delivery.
+        </p>
+      </div>
+      ` : ''}
 
       <div style="margin-top:28px;text-align:center;border-top:1px solid #EEF2F5;padding-top:24px;">
         <p style="font-size:13px;color:${BRAND.muted};margin:0 0 16px;">Need assistance with your order?</p>

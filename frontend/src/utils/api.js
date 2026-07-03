@@ -40,6 +40,39 @@ export async function updateOrderStatus(orderId, status) {
   return res.json();
 }
 
+export async function delayOrder(orderId, newDeliveryDate) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/orders/${orderId}/delay`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ delivery_timeline: newDeliveryDate }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(err.message || 'Failed to delay order');
+  }
+  return res.json();
+}
+
+export async function deliverOrder(orderId, invoiceFile) {
+  const headers = await authHeaders();
+  const formData = new FormData();
+  formData.append('invoice', invoiceFile);
+  
+  const res = await fetch(`${API_BASE}/orders/${orderId}/deliver`, {
+    method: 'POST',
+    headers: {
+      Authorization: headers.Authorization,
+    },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(err.message || 'Failed to mark as delivered');
+  }
+  return res.json();
+}
+
 export async function sendEmailNotification(orderId, type) {
   const headers = await authHeaders();
   const res = await fetch(`${API_BASE}/orders/${orderId}/notify`, {
