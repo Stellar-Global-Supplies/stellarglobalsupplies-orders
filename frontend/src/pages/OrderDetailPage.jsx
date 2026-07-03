@@ -289,8 +289,8 @@ export default function OrderDetailPage() {
             }
           </button>
 
-          {/* Advance Status */}
-          {action && (
+          {/* Advance Status - skip Delivered since we have separate deliver button with invoice */}
+          {action && order.status !== 'Ready to Dispatch' && (
             <button
               className="btn btn-primary"
               onClick={() => setConfirmModal(true)}
@@ -317,7 +317,7 @@ export default function OrderDetailPage() {
             </button>
           )}
 
-          {/* Mark as Delivered - with invoice */}
+          {/* Mark as Delivered - with invoice and payment status */}
           {order.status === 'Ready to Dispatch' && (
             <button
               className="btn btn-primary"
