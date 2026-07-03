@@ -497,6 +497,36 @@ resource "aws_apigatewayv2_route" "post_notify" {
   target    = "integrations/${aws_apigatewayv2_integration.send_notification.id}"
 }
 
+# Delay order endpoint
+resource "aws_apigatewayv2_route" "patch_delay" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "PATCH /orders/{id}/delay"
+  target    = "integrations/${aws_apigatewayv2_integration.update_status.id}"
+}
+
+# Deliver order endpoint
+resource "aws_apigatewayv2_integration" "deliver_order" {
+  api_id                 = aws_apigatewayv2_api.oms.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.update_status.invoke_arn
+  integration_method     = "POST"
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "post_deliver" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "POST /orders/{id}/deliver"
+  target    = "integrations/${aws_apigatewayv2_integration.deliver_order.id}"
+}
+
+resource "aws_lambda_permission" "apigw_deliver_order" {
+  statement_id  = "AllowAPIGWDeliver"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.update_status.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.oms.execution_arn}/*/*"
+}
+
 # Lambda invoke permissions
 resource "aws_lambda_permission" "apigw_create_order" {
   statement_id  = "AllowAPIGW"

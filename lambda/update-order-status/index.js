@@ -83,6 +83,7 @@ const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
   'Access-Control-Allow-Methods': 'PATCH,OPTIONS',
+  'Access-Control-Allow-Credentials': 'true',
 };
 
 function respond(code, body) {
@@ -108,6 +109,66 @@ exports.handler = async (event) => {
   const orderId = event.pathParameters?.id;
   if (!orderId) return respond(400, { message: 'Order ID required' });
 
+  const path = event.path || event.rawPath || '';
+
+  // Handle delay endpoint
+  if (path.includes('/delay')) {
+    let body = {};
+    try { body = JSON.parse(event.body || '{}'); }
+    catch { return respond(400, { message: 'Invalid JSON' }); }
+
+    const { delivery_timeline } = body;
+    if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('orders')
+      .update({ 
+        delivery_timeline,
+        updated_at: new Date().toISOString(),
+        updated_by: user.id,
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error('Delay error:', updateErr);
+      return respond(500, { message: 'Failed to delay order' });
+    }
+
+    return respond(200, updated);
+  }
+
+  // Handle deliver endpoint
+  if (path.includes('/deliver')) {
+    // For deliver, we just update status to Delivered
+    // Invoice handling would require S3 upload - simplified for now
+    const { data: updated, error: updateErr } = await supabase
+      .from('orders')
+      .update({ 
+        status: 'Delivered',
+        updated_at: new Date().toISOString(),
+        updated_by: user.id,
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (updateErr) {
+      console.error('Deliver error:', updateErr);
+      return respond(500, { message: 'Failed to mark as delivered' });
+    }
+
+    // Send delivery email
+    try {
+      const { subject, html, text } = buildStatusUpdateEmail(updated);
+      await sendEmail({ to: updated.email, subject, html, text });
+    } catch (e) { console.error('Delivery email error (non-fatal):', e.message); }
+
+    return respond(200, updated);
+  }
+
+  // Handle status update (original logic)
   let body = {};
   try { body = JSON.parse(event.body || '{}'); }
   catch { return respond(400, { message: 'Invalid JSON' }); }
