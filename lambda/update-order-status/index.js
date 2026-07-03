@@ -113,10 +113,8 @@ async function sendEmail({ to, subject, html, text, invoiceUrl }) {
 
 function buildRawMessageWithAttachment({ to, subject, html, text, from, attachment, filename, mimeType }) {
   const boundary = `boundary_${Date.now()}`;
-  const attachmentBase64 = attachment.toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  // Use standard base64 for attachment content within MIME message
+  const attachmentBase64 = attachment.toString('base64');
   
   const raw = [
     `From: ${from}`,
@@ -150,6 +148,7 @@ function buildRawMessageWithAttachment({ to, subject, html, text, from, attachme
     `--${boundary}--`,
   ].join('\r\n');
 
+  // Apply base64url encoding only to the final message for Gmail API
   return Buffer.from(raw)
     .toString('base64')
     .replace(/\+/g, '-')
@@ -239,8 +238,11 @@ exports.handler = async (event) => {
         const bodyBuffer = Buffer.from(event.body, event.isBase64Encoded ? 'base64' : 'utf8');
         const bodyString = bodyBuffer.toString('utf8');
         
-        // Extract file from multipart data
-        const fileMatch = bodyString.match(/Content-Disposition: form-data; name="invoice"; filename="([^"]+)"\r?\nContent-Type: ([^\r?\n]+)\r?\n\r?\n([\s\S]*?)(?=\r?\n--|$)/);
+        // Extract file from multipart data - improved regex
+        const fileMatch = bodyString.match(new RegExp(
+          `Content-Disposition: form-data; name="invoice"; filename="([^"]+)"\\r?\\n` +
+          `Content-Type: ([^\\r?\\n]+)\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n--${boundary}|$)`
+        ));
         if (fileMatch) {
           const filename = fileMatch[1];
           const mimeType = fileMatch[2];
@@ -262,8 +264,10 @@ exports.handler = async (event) => {
           }
         }
         
-        // Extract payment_status from form data
-        const paymentMatch = bodyString.match(/name="payment_status"\r?\n\r?\n([^\r?\n]+)/);
+        // Extract payment_status from form data - improved regex
+        const paymentMatch = bodyString.match(new RegExp(
+          `name="payment_status"\\r?\\n\\r?\\n([^\\r?\\n]+)`
+        ));
         if (paymentMatch) {
           paymentStatus = paymentMatch[1].trim();
         }

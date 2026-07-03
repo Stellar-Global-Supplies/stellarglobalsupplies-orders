@@ -115,12 +115,8 @@ export default function OrderDetailPage() {
     setSendingEmail(true);
     setDeliverModal(false);
     try {
-      // Update status to Delivered with payment status
-      await updateOrderStatus(order.id, 'Delivered', paymentStatus || order.payment_status);
-      // If invoice is attached, upload it (simplified - just mark as delivered for now)
-      if (invoiceFile) {
-        await deliverOrder(order.id, invoiceFile);
-      }
+      // Call deliverOrder which handles both status update and invoice upload
+      await deliverOrder(order.id, invoiceFile, paymentStatus || order.payment_status);
       toast.success('Order marked as delivered');
       await loadOrder();
     } catch (err) {

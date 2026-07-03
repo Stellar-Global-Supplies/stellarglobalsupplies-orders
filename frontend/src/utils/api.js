@@ -57,10 +57,15 @@ export async function delayOrder(orderId, newDeliveryDate) {
   return res.json();
 }
 
-export async function deliverOrder(orderId, invoiceFile) {
+export async function deliverOrder(orderId, invoiceFile, paymentStatus) {
   const headers = await authHeaders();
   const formData = new FormData();
-  formData.append('invoice', invoiceFile);
+  if (invoiceFile) {
+    formData.append('invoice', invoiceFile);
+  }
+  if (paymentStatus) {
+    formData.append('payment_status', paymentStatus);
+  }
   
   const res = await fetch(`${API_BASE}/orders/${orderId}/deliver`, {
     method: 'POST',
@@ -94,7 +99,7 @@ export async function sendEmailNotification(orderId, type) {
 export async function fetchOrders({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
   let query = supabase
     .from('orders')
-    .select('*', { count: 'exact' })
+    .select('*, tracking_token, invoice_url, invoice_uploaded_at', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -126,9 +131,9 @@ export async function fetchOrderByTrackingToken(token) {
   return res.json();
 }
 
-// Fetch order by ID with invoice fields
+// Fetch order by ID with invoice and tracking fields
 export async function fetchOrderById(id) {
-  const { data, error } = await supabase.from('orders').select('*, invoice_url, invoice_uploaded_at').eq('id', id).single();
+  const { data, error } = await supabase.from('orders').select('*, invoice_url, invoice_uploaded_at, tracking_token').eq('id', id).single();
   if (error) throw error;
   return data;
 }

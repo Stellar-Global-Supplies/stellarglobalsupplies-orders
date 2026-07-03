@@ -244,6 +244,9 @@ Contact us: +91 96376 55556
 function buildStatusUpdateEmail(order) {
   const orderId = order.id.slice(0, 8).toUpperCase();
   const s = STATUS_COLORS[order.status] || STATUS_COLORS['Order Received'];
+  const trackingUrl = order.tracking_token 
+    ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
+    : null;
 
   const statusMessages = {
     'Processing':        { emoji: '⚙️', msg: 'Our team is currently processing your order. We\'re working hard to ensure everything is perfect for you.' },
@@ -288,6 +291,18 @@ function buildStatusUpdateEmail(order) {
       </div>
       ` : ''}
 
+      ${trackingUrl ? `
+      <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
+        <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Track Your Order</div>
+        <p style="margin:0 0 12px;font-size:13px;color:${BRAND.text};">
+          Use this link to track your order status anytime:
+        </p>
+        <a href="${trackingUrl}" style="display:inline-block;background:${BRAND.teal};color:#fff;text-decoration:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;">
+          📍 Track Order #${orderId}
+        </a>
+      </div>
+      ` : ''}
+
       ${order.invoice_url ? `
       <div style="margin-top:20px;padding:16px 20px;background:${BRAND.light};border-radius:10px;border:1px solid ${BRAND.teal}22;">
         <div style="font-size:12px;font-weight:700;color:${BRAND.muted};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Invoice</div>
@@ -320,7 +335,7 @@ function buildStatusUpdateEmail(order) {
     </div>
   `;
 
-  const html = baseLayout(content, `Your order #${orderId} is now: ${order.status}.`);
+  const html = baseLayout(content, `Your order #${orderId} is now: ${order.status}. Track at: ${trackingUrl || 'N/A'}`);
 
   const text = `
 Stellar Global Supplies — Order Update
@@ -337,6 +352,8 @@ Order Details:
 - Quantity: ${order.quantity} ${order.unit}
 - Sale Cost: ${formatCurrency(order.sale_cost)}
 - Delivery: ${formatDate(order.delivery_timeline)}
+
+${trackingUrl ? `Track your order: ${trackingUrl}` : ''}
 
 Contact us: +91 96376 55556
   `.trim();

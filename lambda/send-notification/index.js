@@ -6,11 +6,15 @@
 const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
 const ws               = require('ws');
+const AWS              = require('aws-sdk');
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
 catch { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildOrderConfirmationEmail, buildStatusUpdateEmail } = emailTemplates;
+
+const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
+const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-production';
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -61,9 +65,87 @@ function buildRawMessage({ to, subject, html, text, from }) {
     .replace(/=+$/, '');
 }
 
-async function sendEmail({ to, subject, html, text }) {
+function buildRawMessageWithAttachment({ to, subject, html, text, from, attachment, filename, mimeType }) {
+  const boundary = `boundary_${Date.now()}`;
+  // Use standard base64 for attachment content within MIME message
+  const attachmentBase64 = attachment.toString('base64');
+  
+  const raw = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: multipart/alternative; boundary="alt_${boundary}"`,
+    ``,
+    `--alt_${boundary}`,
+    `Content-Type: text/plain; charset="UTF-8"`,
+    ``,
+    text,
+    ``,
+    `--alt_${boundary}`,
+    `Content-Type: text/html; charset="UTF-8"`,
+    ``,
+    html,
+    ``,
+    `--alt_${boundary}--`,
+    ``,
+    `--${boundary}`,
+    `Content-Type: ${mimeType}; name="${filename}"`,
+    `Content-Disposition: attachment; filename="${filename}"`,
+    `Content-Transfer-Encoding: base64`,
+    ``,
+    attachmentBase64,
+    ``,
+    `--${boundary}--`,
+  ].join('\r\n');
+
+  // Apply base64url encoding only to the final message for Gmail API
+  return Buffer.from(raw)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+async function sendEmail({ to, subject, html, text, invoiceUrl }) {
   const gmail = buildGmailClient();
   const from  = `Stellar Global Supplies <stellarglobalsupplies@gmail.com>`;
+  
+  // If invoice URL provided, download and attach
+  if (invoiceUrl) {
+    try {
+      // Extract key from S3 URL
+      const urlMatch = invoiceUrl.match(/https?:\/\/[^/]+\/(.+)$/);
+      if (urlMatch) {
+        const key = decodeURIComponent(urlMatch[1]);
+        const s3Object = await s3.getObject({
+          Bucket: INVOICE_BUCKET,
+          Key: key,
+        }).promise();
+        
+        // Build message with attachment
+        const raw = buildRawMessageWithAttachment({
+          to, subject, html, text, from,
+          attachment: s3Object.Body,
+          filename: key.split('/').pop() || 'invoice',
+          mimeType: s3Object.ContentType || 'application/pdf',
+        });
+        
+        await gmail.users.messages.send({
+          userId:      'me',
+          requestBody: { raw },
+        });
+        return;
+      }
+    } catch (attachErr) {
+      console.error('Invoice attachment error (non-fatal):', attachErr.message);
+    }
+  }
+  
+  // Send without attachment
   await gmail.users.messages.send({
     userId:      'me',
     requestBody: { raw: buildRawMessage({ to, subject, html, text, from }) },
@@ -110,7 +192,9 @@ exports.handler = async (event) => {
   try {
     const builder  = type === 'confirmation' ? buildOrderConfirmationEmail : buildStatusUpdateEmail;
     const { subject, html, text } = builder(order);
-    await sendEmail({ to: order.email, subject, html, text });
+    // Pass invoice URL for status update emails to include as attachment
+    const invoiceUrl = type === 'status_update' ? order.invoice_url : null;
+    await sendEmail({ to: order.email, subject, html, text, invoiceUrl });
     return respond(200, { message: 'Email sent', recipient: order.email, type });
   } catch (err) {
     console.error('Send notification error:', err);

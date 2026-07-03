@@ -65,6 +65,10 @@ export function buildBusinessWhatsAppMessage(order) {
     ? format(new Date(order.delivery_timeline), 'dd MMM yyyy')
     : 'TBD';
 
+  const trackingUrl = order.tracking_token
+    ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
+    : null;
+
   const lines = [
     `*New Order Received - Stellar OMS*`,
     ``,
@@ -82,6 +86,21 @@ export function buildBusinessWhatsAppMessage(order) {
     ``,
     `*Status:* ${order.status}`,
   ];
+
+  // Add tracking URL
+  if (trackingUrl) {
+    lines.push(`*Track Order:* ${trackingUrl}`);
+    lines.push(``);
+  }
+
+  // Add invoice link if available
+  if (order.invoice_url) {
+    const invoiceNote = order.invoice_uploaded_at && new Date(order.invoice_uploaded_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ? `*Invoice:* ${order.invoice_url}`
+      : `*Invoice:* Contact customer for invoice (link expired)`;
+    lines.push(invoiceNote);
+    lines.push(``);
+  }
 
   const message = encodeURIComponent(lines.join('\n'));
   return `https://wa.me/${BUSINESS_NUMBER}?text=${message}`;
