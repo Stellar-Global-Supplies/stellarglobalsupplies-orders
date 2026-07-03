@@ -74,6 +74,7 @@ locals {
     SUPABASE_URL              = var.supabase_url
     SUPABASE_SERVICE_ROLE_KEY = var.supabase_service_key
     NODE_ENV                  = "production"
+    INVOICE_BUCKET_NAME       = aws_s3_bucket.invoices.bucket
   }
   lambda_zip_dir = "${path.module}/.lambda_zips"
 }
@@ -327,9 +328,38 @@ resource "aws_iam_policy" "lambda_ssm" {
   })
 }
 
+# Policy to allow Lambda to write invoices to S3 bucket
+resource "aws_iam_policy" "lambda_s3_invoices" {
+  name        = "${local.name_prefix}-s3-invoices"
+  description = "Allow Lambda to upload invoices to S3 bucket"
+  tags        = local.common_tags
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3InvoiceAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.invoices.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "lambda_ssm" {
   role       = aws_iam_role.lambda.name
   policy_arn = aws_iam_policy.lambda_ssm.arn
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_s3_invoices" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.lambda_s3_invoices.arn
 }
 
 data "aws_caller_identity" "current" {}
