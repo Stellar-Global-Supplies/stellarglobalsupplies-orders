@@ -250,42 +250,67 @@ exports.handler = async (event) => {
     let paymentStatus = 'Paid';
 
     if (contentType.includes('multipart/form-data')) {
-      const boundary = contentType.split('boundary=')[1];
+      // Extract boundary, removing any quotes
+      const boundaryMatch = contentType.match(/boundary="?([^";]+)"?/);
+      const boundary = boundaryMatch ? boundaryMatch[1] : null;
+      
       if (boundary && event.body) {
         // Decode base64 body
         const bodyBuffer = Buffer.from(event.body, event.isBase64Encoded ? 'base64' : 'utf8');
-        const bodyString = bodyBuffer.toString('utf8');
         
-        // Extract file from multipart data - improved regex
-        const fileMatch = bodyString.match(new RegExp(
-          `Content-Disposition: form-data; name="invoice"; filename="([^"]+)"\\r?\\n` +
-          `Content-Type: ([^\\r?\\n]+)\\r?\\n\\r?\\n([\\s\\S]*?)(?=\\r?\\n--${boundary}|$)`
-        ));
-        if (fileMatch) {
-          const filename = fileMatch[1];
-          const mimeType = fileMatch[2];
-          const fileContent = fileMatch[3];
-          
-          // Upload to S3
-          const key = `invoices/${orderId}/${Date.now()}_${filename}`;
-          try {
-            await s3.putObject({
-              Bucket: INVOICE_BUCKET,
-              Key: key,
-              Body: fileContent,
-              ContentType: mimeType,
-              ACL: 'public-read',
-            }).promise();
-            invoiceUrl = `https://${INVOICE_BUCKET}.s3.amazonaws.com/${key}`;
-          } catch (s3Err) {
-            console.error('S3 upload error:', s3Err);
+        // Find the invoice file part
+        const boundaryBuffer = Buffer.from(`\r\n--${boundary}\r\n`);
+        const headerEndMarker = Buffer.from('\r\n\r\n');
+        
+        // Look for invoice part
+        const invoiceHeader = `Content-Disposition: form-data; name="invoice"; filename=`;
+        const invoiceHeaderBuffer = Buffer.from(invoiceHeader);
+        
+        const invoiceStart = bodyBuffer.indexOf(invoiceHeaderBuffer);
+        if (invoiceStart !== -1) {
+          // Find the end of the header (double CRLF)
+          const headerEnd = bodyBuffer.indexOf(headerEndMarker, invoiceStart);
+          if (headerEnd !== -1) {
+            // Find the start of the filename
+            const filenameStart = bodyBuffer.indexOf(Buffer.from('"'), invoiceStart + invoiceHeaderBuffer.length);
+            const filenameEnd = bodyBuffer.indexOf(Buffer.from('"'), filenameStart + 1);
+            const filename = bodyBuffer.slice(filenameStart + 1, filenameEnd).toString('utf8');
+            
+            // Find content type
+            const ctStart = bodyBuffer.indexOf(Buffer.from('Content-Type: '), headerEnd);
+            const ctEnd = bodyBuffer.indexOf(Buffer.from('\r\n'), ctStart);
+            const mimeType = bodyBuffer.slice(ctStart + 14, ctEnd).toString('utf8');
+            
+            // Find the file content start (after double CRLF)
+            const contentStart = headerEnd + 4;
+            
+            // Find the end of the file content (next boundary)
+            const nextBoundary = bodyBuffer.indexOf(boundaryBuffer, contentStart);
+            const contentEnd = nextBoundary !== -1 ? nextBoundary : bodyBuffer.length - (boundary.length + 8);
+            
+            // Extract file content
+            const fileContent = bodyBuffer.slice(contentStart, contentEnd);
+            
+            // Upload to S3
+            const key = `invoices/${orderId}/${Date.now()}_${filename}`;
+            try {
+              await s3.putObject({
+                Bucket: INVOICE_BUCKET,
+                Key: key,
+                Body: fileContent,
+                ContentType: mimeType,
+                ACL: 'public-read',
+              }).promise();
+              invoiceUrl = `https://${INVOICE_BUCKET}.s3.amazonaws.com/${key}`;
+            } catch (s3Err) {
+              console.error('S3 upload error:', s3Err);
+            }
           }
         }
         
-        // Extract payment_status from form data - improved regex
-        const paymentMatch = bodyString.match(new RegExp(
-          `name="payment_status"\\r?\\n\\r?\\n([^\\r?\\n]+)`
-        ));
+        // Extract payment_status from form data
+        const bodyString = bodyBuffer.toString('utf8');
+        const paymentMatch = bodyString.match(/name="payment_status"\r?\n\r?\n([^\r?\n]+)/);
         if (paymentMatch) {
           paymentStatus = paymentMatch[1].trim();
         }
