@@ -53,7 +53,7 @@ variable "supabase_url"             { sensitive   = true }
 variable "supabase_service_key"     { sensitive   = true }
 variable "environment"              { default     = "production" }
 # Set to the ARN of your already-issued ACM cert (us-east-1) — leave empty to create new
-variable "existing_acm_cert_arn"    { default     = "" }
+variable "existing_acm_cert_arn"    { default     = "arn:aws:acm:us-east-1:471112840461:certificate/27fa15e5-f9f8-4b5d-a7b2-a6ee4c212ed7" }
 
 locals {
   name_prefix = "stellar-oms"
@@ -63,8 +63,7 @@ locals {
     ManagedBy   = "Terraform"
   }
   # Use existing cert if ARN provided, otherwise use the one we create
-  cert_arn = var.existing_acm_cert_arn != "" ? var.existing_acm_cert_arn : aws_acm_certificate_validation.oms[0].certificate_arn
-}
+  cert_arn = var.existing_acm_cert_arn != "" ? var.existing_acm_cert_arn: aws_acm_certificate_validation.oms[0].certificate_arn
 
 ##############################################################################
 # Existing Route53 hosted zone
@@ -211,10 +210,16 @@ resource "aws_cloudfront_distribution" "frontend" {
     error_caching_min_ttl = 0
   }
 
-  restrictions { geo_restriction { restriction_type = "none" } }
+  restrictions { 
+    geo_restriction { restriction_type = "none" } }
 
   viewer_certificate {
     acm_certificate_arn      = local.cert_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
+  viewer_certificate {
+    acm_certificate_arn      = var.acm_certificate_arn
     ssl_support_method       = "sni-only"
     minimum_protocol_version = "TLSv1.2_2021"
   }
