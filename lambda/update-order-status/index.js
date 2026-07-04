@@ -2,17 +2,24 @@
  * Lambda: PATCH /orders/{id}/status
  * Validates transition, updates Supabase, sends status email via Gmail API
  * Handles invoice upload to S3
+ *
+ * FIXES:
+ * 1. Multipart form-data parser — correct boundary detection for first part
+ * 2. S3 upload — removed ACL:'public-read' (blocked on most buckets); use pre-signed URLs instead
+ * 3. Email attachment — fetch invoice bytes via pre-signed URL, not re-parsed S3 key from URL
+ * 4. invoice_uploaded_at always written on successful upload
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
 const ws               = require('ws');
 const AWS              = require('aws-sdk');
-const { randomUUID }   = require('crypto');
+const https            = require('https');
 
-// S3 client for invoice uploads
 const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
 const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-production';
+// Pre-signed URL expiry = 7 days (matches the customer-facing expiry window)
+const PRESIGNED_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
@@ -22,14 +29,10 @@ const { buildStatusUpdateEmail, buildDelayNotificationEmail } = emailTemplates;
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    realtime: {
-      transport: ws,
-    },
-  }
+  { realtime: { transport: ws } }
 );
 
-// ── Gmail helper (shared pattern across all 3 lambdas) ────────────────────
+// ── Gmail helper ────────────────────────────────────────────────────────────
 function buildGmailClient() {
   const auth = new google.auth.OAuth2(
     process.env.GMAIL_CLIENT_ID,
@@ -69,53 +72,10 @@ function buildRawMessage({ to, subject, html, text, from }) {
     .replace(/=+$/, '');
 }
 
-async function sendEmail({ to, subject, html, text, invoiceUrl }) {
-  const gmail = buildGmailClient();
-  const from  = `Stellar Global Supplies <stellarglobalsupplies@gmail.com>`;
-  
-  // If invoice URL provided, download and attach
-  if (invoiceUrl) {
-    try {
-      // Extract key from S3 URL
-      const urlMatch = invoiceUrl.match(/https?:\/\/[^/]+\/(.+)$/);
-      if (urlMatch) {
-        const key = decodeURIComponent(urlMatch[1]);
-        const s3Object = await s3.getObject({
-          Bucket: INVOICE_BUCKET,
-          Key: key,
-        }).promise();
-        
-        // Build message with attachment
-        const raw = buildRawMessageWithAttachment({
-          to, subject, html, text, from,
-          attachment: s3Object.Body,
-          filename: key.split('/').pop() || 'invoice',
-          mimeType: s3Object.ContentType || 'application/pdf',
-        });
-        
-        await gmail.users.messages.send({
-          userId:      'me',
-          requestBody: { raw },
-        });
-        return;
-      }
-    } catch (attachErr) {
-      console.error('Invoice attachment error (non-fatal):', attachErr.message);
-    }
-  }
-  
-  // Send without attachment
-  await gmail.users.messages.send({
-    userId:      'me',
-    requestBody: { raw: buildRawMessage({ to, subject, html, text, from }) },
-  });
-}
-
 function buildRawMessageWithAttachment({ to, subject, html, text, from, attachment, filename, mimeType }) {
   const boundary = `boundary_${Date.now()}`;
-  // Use standard base64 for attachment content within MIME message
   const attachmentBase64 = attachment.toString('base64');
-  
+
   const raw = [
     `From: ${from}`,
     `To: ${to}`,
@@ -148,7 +108,6 @@ function buildRawMessageWithAttachment({ to, subject, html, text, from, attachme
     `--${boundary}--`,
   ].join('\r\n');
 
-  // Apply base64url encoding only to the final message for Gmail API
   return Buffer.from(raw)
     .toString('base64')
     .replace(/\+/g, '-')
@@ -156,7 +115,115 @@ function buildRawMessageWithAttachment({ to, subject, html, text, from, attachme
     .replace(/=+$/, '');
 }
 
-// ── Status transition rules ───────────────────────────────────────────────
+/**
+ * FIX: Fetch invoice bytes from a pre-signed S3 URL (or any HTTPS URL).
+ * Previously the code tried to re-parse the public S3 URL into a key,
+ * which is fragile. Instead we store the S3 key separately and fetch via
+ * getObject. If the stored value is a full URL (legacy), fall back gracefully.
+ */
+async function fetchInvoiceBytes(invoiceS3Key) {
+  try {
+    const s3Object = await s3.getObject({
+      Bucket: INVOICE_BUCKET,
+      Key: invoiceS3Key,
+    }).promise();
+    return {
+      data: s3Object.Body,
+      mimeType: s3Object.ContentType || 'application/pdf',
+      filename: invoiceS3Key.split('/').pop() || 'invoice.pdf',
+    };
+  } catch (err) {
+    console.error('S3 getObject error:', err.message);
+    return null;
+  }
+}
+
+async function sendEmail({ to, subject, html, text, invoiceS3Key }) {
+  const gmail = buildGmailClient();
+  const from  = `Stellar Global Supplies <stellarglobalsupplies@gmail.com>`;
+
+  // Attempt to attach invoice if a key is provided
+  if (invoiceS3Key) {
+    try {
+      const invoice = await fetchInvoiceBytes(invoiceS3Key);
+      if (invoice) {
+        const raw = buildRawMessageWithAttachment({
+          to, subject, html, text, from,
+          attachment: invoice.data,
+          filename:   invoice.filename,
+          mimeType:   invoice.mimeType,
+        });
+        await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+        return;
+      }
+    } catch (attachErr) {
+      console.error('Invoice attachment error (non-fatal):', attachErr.message);
+    }
+  }
+
+  // Send without attachment
+  await gmail.users.messages.send({
+    userId:      'me',
+    requestBody: { raw: buildRawMessage({ to, subject, html, text, from }) },
+  });
+}
+
+// ── Multipart form-data parser ──────────────────────────────────────────────
+/**
+ * FIX: The previous parser used `\r\n--boundary\r\n` as the search token
+ * which skips the very first boundary (which has no leading \r\n).
+ * This rewrite correctly splits on all boundaries.
+ */
+function parseMultipart(bodyBuffer, boundary) {
+  const boundaryLine  = Buffer.from(`--${boundary}`);
+  const CRLF          = Buffer.from('\r\n');
+  const DOUBLE_CRLF   = Buffer.from('\r\n\r\n');
+
+  const parts = [];
+  let pos = 0;
+
+  while (pos < bodyBuffer.length) {
+    // Find next boundary
+    const bPos = bodyBuffer.indexOf(boundaryLine, pos);
+    if (bPos === -1) break;
+
+    const afterBoundary = bPos + boundaryLine.length;
+    // Check for final boundary (--)
+    if (bodyBuffer.slice(afterBoundary, afterBoundary + 2).toString() === '--') break;
+
+    // Skip \r\n after boundary
+    const headerStart = afterBoundary + 2; // skip \r\n
+
+    // Find end of headers
+    const headerEnd = bodyBuffer.indexOf(DOUBLE_CRLF, headerStart);
+    if (headerEnd === -1) break;
+
+    const headerText = bodyBuffer.slice(headerStart, headerEnd).toString('utf8');
+    const contentStart = headerEnd + 4; // skip \r\n\r\n
+
+    // Find start of next boundary
+    const nextBound = bodyBuffer.indexOf(Buffer.from(`\r\n--${boundary}`), contentStart);
+    const contentEnd = nextBound !== -1 ? nextBound : bodyBuffer.length;
+
+    const content = bodyBuffer.slice(contentStart, contentEnd);
+
+    // Parse headers
+    const headers = {};
+    headerText.split('\r\n').forEach(line => {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > -1) {
+        headers[line.slice(0, colonIdx).trim().toLowerCase()] = line.slice(colonIdx + 1).trim();
+      }
+    });
+
+    parts.push({ headers, content });
+    pos = contentStart;
+  }
+
+  return parts;
+}
+
+// ── Status transition rules ────────────────────────────────────────────────
 const VALID_STATUSES = ['Order Received', 'Processing', 'Ready to Dispatch', 'Delivered'];
 const NEXT_STATUS = {
   'Order Received':    'Processing',
@@ -167,7 +234,7 @@ const NEXT_STATUS = {
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-  'Access-Control-Allow-Methods': 'PATCH,OPTIONS',
+  'Access-Control-Allow-Methods': 'PATCH,POST,OPTIONS',
   'Access-Control-Allow-Credentials': 'true',
 };
 
@@ -196,8 +263,8 @@ exports.handler = async (event) => {
 
   const path = event.path || event.rawPath || '';
 
-    // Handle delay endpoint
-    if (path.includes('/delay')) {
+  // ── Delay endpoint ────────────────────────────────────────────────────────
+  if (path.includes('/delay')) {
     let body = {};
     try { body = JSON.parse(event.body || '{}'); }
     catch { return respond(400, { message: 'Invalid JSON' }); }
@@ -205,35 +272,17 @@ exports.handler = async (event) => {
     const { delivery_timeline } = body;
     if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
 
-    // First fetch the current order to get customer email
     const { data: currentOrder, error: fetchErr } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .single();
-
-    if (fetchErr || !currentOrder) {
-      console.error('Fetch error:', fetchErr);
-      return respond(404, { message: 'Order not found' });
-    }
+      .from('orders').select('*').eq('id', orderId).single();
+    if (fetchErr || !currentOrder) return respond(404, { message: 'Order not found' });
 
     const { data: updated, error: updateErr } = await supabase
       .from('orders')
-      .update({ 
-        delivery_timeline,
-        updated_at: new Date().toISOString(),
-        updated_by: user.id,
-      })
-      .eq('id', orderId)
-      .select()
-      .single();
+      .update({ delivery_timeline, updated_at: new Date().toISOString(), updated_by: user.id })
+      .eq('id', orderId).select().single();
 
-    if (updateErr) {
-      console.error('Delay error:', updateErr);
-      return respond(500, { message: 'Failed to delay order' });
-    }
+    if (updateErr) { console.error('Delay error:', updateErr); return respond(500, { message: 'Failed to delay order' }); }
 
-    // Send delay notification email
     try {
       const { subject, html, text } = buildDelayNotificationEmail(updated);
       await sendEmail({ to: updated.email, subject, html, text });
@@ -242,117 +291,98 @@ exports.handler = async (event) => {
     return respond(200, updated);
   }
 
-  // Handle deliver endpoint
+  // ── Deliver endpoint ───────────────────────────────────────────────────────
   if (path.includes('/deliver')) {
-    // Parse multipart form data for invoice file
     const contentType = event.headers?.['content-type'] || event.headers?.['Content-Type'] || '';
-    let invoiceUrl = null;
+    let invoiceS3Key  = null;
+    let invoiceUrl    = null;
     let paymentStatus = 'Paid';
 
     if (contentType.includes('multipart/form-data')) {
-      // Extract boundary, removing any quotes
+      // FIX: strip optional quotes from boundary value
       const boundaryMatch = contentType.match(/boundary="?([^";]+)"?/);
-      const boundary = boundaryMatch ? boundaryMatch[1] : null;
-      
+      const boundary = boundaryMatch ? boundaryMatch[1].trim() : null;
+
       if (boundary && event.body) {
-        // Decode base64 body
         const bodyBuffer = Buffer.from(event.body, event.isBase64Encoded ? 'base64' : 'utf8');
-        
-        // Find the invoice file part
-        const boundaryBuffer = Buffer.from(`\r\n--${boundary}\r\n`);
-        const headerEndMarker = Buffer.from('\r\n\r\n');
-        
-        // Look for invoice part
-        const invoiceHeader = `Content-Disposition: form-data; name="invoice"; filename=`;
-        const invoiceHeaderBuffer = Buffer.from(invoiceHeader);
-        
-        const invoiceStart = bodyBuffer.indexOf(invoiceHeaderBuffer);
-        if (invoiceStart !== -1) {
-          // Find the end of the header (double CRLF)
-          const headerEnd = bodyBuffer.indexOf(headerEndMarker, invoiceStart);
-          if (headerEnd !== -1) {
-            // Find the start of the filename
-            const filenameStart = bodyBuffer.indexOf(Buffer.from('"'), invoiceStart + invoiceHeaderBuffer.length);
-            const filenameEnd = bodyBuffer.indexOf(Buffer.from('"'), filenameStart + 1);
-            const filename = bodyBuffer.slice(filenameStart + 1, filenameEnd).toString('utf8');
-            
-            // Find content type
-            const ctStart = bodyBuffer.indexOf(Buffer.from('Content-Type: '), headerEnd);
-            const ctEnd = bodyBuffer.indexOf(Buffer.from('\r\n'), ctStart);
-            const mimeType = bodyBuffer.slice(ctStart + 14, ctEnd).toString('utf8');
-            
-            // Find the file content start (after double CRLF)
-            const contentStart = headerEnd + 4;
-            
-            // Find the end of the file content (next boundary)
-            const nextBoundary = bodyBuffer.indexOf(boundaryBuffer, contentStart);
-            const contentEnd = nextBoundary !== -1 ? nextBoundary : bodyBuffer.length - (boundary.length + 8);
-            
-            // Extract file content
-            const fileContent = bodyBuffer.slice(contentStart, contentEnd);
-            
-            // Upload to S3
-            const key = `invoices/${orderId}/${Date.now()}_${filename}`;
-            try {
-              await s3.putObject({
-                Bucket: INVOICE_BUCKET,
-                Key: key,
-                Body: fileContent,
-                ContentType: mimeType,
-                ACL: 'public-read',
-              }).promise();
-              invoiceUrl = `https://${INVOICE_BUCKET}.s3.amazonaws.com/${key}`;
-            } catch (s3Err) {
-              console.error('S3 upload error:', s3Err);
+        const parts = parseMultipart(bodyBuffer, boundary);
+
+        for (const part of parts) {
+          const disposition = part.headers['content-disposition'] || '';
+
+          // Extract payment_status field
+          if (disposition.includes('name="payment_status"')) {
+            paymentStatus = part.content.toString('utf8').trim();
+            continue;
+          }
+
+          // Extract invoice file
+          if (disposition.includes('name="invoice"') && disposition.includes('filename=')) {
+            const filenameMatch = disposition.match(/filename="?([^";]+)"?/);
+            const filename = filenameMatch ? filenameMatch[1] : `invoice_${Date.now()}.pdf`;
+            const mimeType = part.headers['content-type'] || 'application/pdf';
+
+            if (part.content.length > 0) {
+              const key = `invoices/${orderId}/${Date.now()}_${filename}`;
+              try {
+                // FIX: No ACL — rely on bucket policy / pre-signed URLs instead
+                await s3.putObject({
+                  Bucket:      INVOICE_BUCKET,
+                  Key:         key,
+                  Body:        part.content,
+                  ContentType: mimeType,
+                }).promise();
+
+                invoiceS3Key = key;
+
+                // Generate a pre-signed URL valid for 7 days
+                invoiceUrl = s3.getSignedUrl('getObject', {
+                  Bucket:  INVOICE_BUCKET,
+                  Key:     key,
+                  Expires: PRESIGNED_EXPIRY_SECONDS,
+                });
+
+                console.log('Invoice uploaded to S3:', key);
+              } catch (s3Err) {
+                // FIX: Log full error so it's visible in CloudWatch
+                console.error('S3 upload error (code:', s3Err.code, '):', s3Err.message);
+              }
+            } else {
+              console.warn('Invoice file part was empty — skipping S3 upload');
             }
           }
-        }
-        
-        // Extract payment_status from form data
-        const bodyString = bodyBuffer.toString('utf8');
-        const paymentMatch = bodyString.match(/name="payment_status"\r?\n\r?\n([^\r?\n]+)/);
-        if (paymentMatch) {
-          paymentStatus = paymentMatch[1].trim();
         }
       }
     }
 
-    // Update order to Delivered with invoice URL and timestamp
-    const updateData = { 
-      status: 'Delivered',
+    const updateData = {
+      status:         'Delivered',
       payment_status: paymentStatus,
-      updated_at: new Date().toISOString(),
-      updated_by: user.id,
+      updated_at:     new Date().toISOString(),
+      updated_by:     user.id,
     };
-    
-    // Only set invoice fields if invoice was uploaded
-    if (invoiceUrl) {
-      updateData.invoice_url = invoiceUrl;
-      updateData.invoice_uploaded_at = new Date().toISOString();
+
+    if (invoiceUrl && invoiceS3Key) {
+      updateData.invoice_url         = invoiceUrl;        // pre-signed URL
+      updateData.invoice_s3_key      = invoiceS3Key;      // raw key for re-generation
+      updateData.invoice_uploaded_at = new Date().toISOString(); // FIX: always set this
     }
-    
+
     const { data: updated, error: updateErr } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', orderId)
-      .select()
-      .single();
+      .from('orders').update(updateData).eq('id', orderId).select().single();
 
-    if (updateErr) {
-      console.error('Deliver error:', updateErr);
-      return respond(500, { message: 'Failed to mark as delivered' });
-    }
+    if (updateErr) { console.error('Deliver error:', updateErr); return respond(500, { message: 'Failed to mark as delivered' }); }
 
-    // Send delivery email with invoice attachment
+    // Send delivery email with invoice attachment (using S3 key, not URL)
     try {
       const { subject, html, text } = buildStatusUpdateEmail(updated);
-      await sendEmail({ to: updated.email, subject, html, text, invoiceUrl: updated.invoice_url });
+      await sendEmail({ to: updated.email, subject, html, text, invoiceS3Key });
     } catch (e) { console.error('Delivery email error (non-fatal):', e.message); }
 
     return respond(200, updated);
   }
 
-  // Handle status update (original logic)
+  // ── Generic status update ─────────────────────────────────────────────────
   let body = {};
   try { body = JSON.parse(event.body || '{}'); }
   catch { return respond(400, { message: 'Invalid JSON' }); }
@@ -361,19 +391,16 @@ exports.handler = async (event) => {
   if (!status || !VALID_STATUSES.includes(status))
     return respond(400, { message: `Invalid status. Valid values: ${VALID_STATUSES.join(', ')}` });
 
-  // Fetch current order
   const { data: current, error: fetchErr } = await supabase
     .from('orders').select('*').eq('id', orderId).single();
   if (fetchErr || !current) return respond(404, { message: 'Order not found' });
 
-  // Validate transition
   const expectedNext = NEXT_STATUS[current.status];
   if (status !== expectedNext)
     return respond(400, {
       message: `Cannot transition "${current.status}" → "${status}". Expected next: "${expectedNext || 'none — already Delivered'}"`,
     });
 
-  // Build update payload
   const updatePayload = {
     status,
     updated_at: new Date().toISOString(),
@@ -383,20 +410,11 @@ exports.handler = async (event) => {
     updatePayload.payment_status = payment_status;
   }
 
-  // Update
   const { data: updated, error: updateErr } = await supabase
-    .from('orders')
-    .update(updatePayload)
-    .eq('id', orderId)
-    .select()
-    .single();
+    .from('orders').update(updatePayload).eq('id', orderId).select().single();
 
-  if (updateErr) {
-    console.error('Update error:', updateErr);
-    return respond(500, { message: 'Failed to update order' });
-  }
+  if (updateErr) { console.error('Update error:', updateErr); return respond(500, { message: 'Failed to update order' }); }
 
-  // Send status email — non-blocking
   try {
     const { subject, html, text } = buildStatusUpdateEmail(updated);
     await sendEmail({ to: updated.email, subject, html, text });

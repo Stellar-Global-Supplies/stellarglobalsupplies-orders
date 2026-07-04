@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { isInvoiceValid } from './api';
 
 const BUSINESS_NUMBER = process.env.REACT_APP_WHATSAPP_NUMBER || '919637655556';
 
@@ -25,22 +26,23 @@ export function buildWhatsAppMessage(order) {
     ``,
   ];
 
-  // Add tracking URL
+  // Tracking URL
   if (order.tracking_token) {
     lines.push(`*Track your order:* https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`);
     lines.push(``);
   }
 
-  // Add invoice link if available (with 7-day expiration note)
+  // FIX: Use shared isInvoiceValid helper for consistent expiry logic
   if (order.invoice_url) {
-    const invoiceNote = order.invoice_uploaded_at && new Date(order.invoice_uploaded_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      ? `*Invoice (valid for 7 days):* ${order.invoice_url}`
-      : `*Invoice:* Contact us to get your invoice (link expired after 7 days)`;
-    lines.push(invoiceNote);
+    if (isInvoiceValid(order)) {
+      lines.push(`*Invoice (valid for 7 days):* ${order.invoice_url}`);
+    } else {
+      lines.push(`*Invoice:* The download link has expired (valid for 7 days after delivery). Please contact us to request a new copy.`);
+    }
     lines.push(``);
   }
 
-  // Add payment reminder if not fully paid
+  // Payment reminder
   if (order.payment_status !== 'Paid') {
     lines.push(`*Note:* Please pay the remaining amount (if any) before delivery.`);
     lines.push(``);
@@ -87,18 +89,17 @@ export function buildBusinessWhatsAppMessage(order) {
     `*Status:* ${order.status}`,
   ];
 
-  // Add tracking URL
   if (trackingUrl) {
     lines.push(`*Track Order:* ${trackingUrl}`);
     lines.push(``);
   }
 
-  // Add invoice link if available
   if (order.invoice_url) {
-    const invoiceNote = order.invoice_uploaded_at && new Date(order.invoice_uploaded_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      ? `*Invoice:* ${order.invoice_url}`
-      : `*Invoice:* Contact customer for invoice (link expired)`;
-    lines.push(invoiceNote);
+    if (isInvoiceValid(order)) {
+      lines.push(`*Invoice:* ${order.invoice_url}`);
+    } else {
+      lines.push(`*Invoice:* Link expired — contact customer to resend`);
+    }
     lines.push(``);
   }
 

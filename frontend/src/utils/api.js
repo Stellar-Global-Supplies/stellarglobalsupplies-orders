@@ -30,7 +30,7 @@ export async function updateOrderStatus(orderId, status, paymentStatus) {
   const headers = await authHeaders();
   const body = { status };
   if (paymentStatus) body.payment_status = paymentStatus;
-  
+
   const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
     method: 'PATCH',
     headers,
@@ -66,10 +66,11 @@ export async function deliverOrder(orderId, invoiceFile, paymentStatus) {
   if (paymentStatus) {
     formData.append('payment_status', paymentStatus);
   }
-  
+
   const res = await fetch(`${API_BASE}/orders/${orderId}/deliver`, {
     method: 'POST',
     headers: {
+      // FIX: do NOT set Content-Type manually — browser must set it with boundary
       Authorization: headers.Authorization,
     },
     body: formData,
@@ -99,7 +100,7 @@ export async function sendEmailNotification(orderId, type) {
 export async function fetchOrders({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
   let query = supabase
     .from('orders')
-    .select('*, tracking_token, invoice_url, invoice_uploaded_at', { count: 'exact' })
+    .select('*, tracking_token, invoice_url, invoice_uploaded_at, invoice_s3_key', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -117,12 +118,9 @@ export async function fetchOrders({ search = '', status = '', page = 1, pageSize
 
 // Public order tracking - no auth required
 export async function fetchOrderByTrackingToken(token) {
-  const API_BASE = process.env.REACT_APP_API_BASE_URL;
   const res = await fetch(`${API_BASE}/track/${token}`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: 'Order not found' }));
@@ -133,7 +131,23 @@ export async function fetchOrderByTrackingToken(token) {
 
 // Fetch order by ID with invoice and tracking fields
 export async function fetchOrderById(id) {
-  const { data, error } = await supabase.from('orders').select('*, invoice_url, invoice_uploaded_at, tracking_token').eq('id', id).single();
+  const { data, error } = await supabase
+    .from('orders')
+    .select('*, invoice_url, invoice_uploaded_at, invoice_s3_key, tracking_token')
+    .eq('id', id)
+    .single();
   if (error) throw error;
   return data;
+}
+
+/**
+ * Check if invoice is still within the 7-day download window.
+ * Works even if invoice_uploaded_at is null (treats as expired).
+ */
+export function isInvoiceValid(order) {
+  if (!order?.invoice_url) return false;
+  if (!order?.invoice_uploaded_at) return false;
+  const uploadedAt = new Date(order.invoice_uploaded_at);
+  const expiresAt  = new Date(uploadedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return new Date() < expiresAt;
 }
