@@ -106,7 +106,7 @@ exports.handler = async (event) => {
   // Parse body
   let body;
   try { body = JSON.parse(event.body || '{}'); }
-  catch { return respond(400, { message: 'Invalid JSON' }); }
+  catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
   const {
     customer_name, phone, email, product_type,
