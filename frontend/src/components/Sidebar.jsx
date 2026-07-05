@@ -124,7 +124,7 @@ export default function Sidebar({ open, onClose }) {
                   : 'transparent',
                 boxShadow: isActive ? 'inset 3px 0 0 #00B98E' : 'none',
                 borderRadius: isActive ? '0 8px 8px 0' : 8,
-                marginLeft: isActive ? -12,  : 0,
+                marginLeft: isActive ? -12 : 0,
                 paddingLeft: isActive ? 24 : 12,
               })}
             >
