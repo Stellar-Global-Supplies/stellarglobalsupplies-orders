@@ -33,12 +33,20 @@ function buildGmailClient() {
 /**
  * Encode a raw RFC-2822 message to base64url for the Gmail API
  */
+function encodeMIMEHeader(str) {
+  // Encode non-ASCII characters using MIME encoded-words format
+  if (/^[\x00-\x7F]*$/.test(str)) return str;
+  const encoded = Buffer.from(str, 'utf-8').toString('base64');
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
 function buildRawMessage({ to, subject, html, text, from }) {
   const boundary = `boundary_${Date.now()}`;
+  const encodedSubject = encodeMIMEHeader(subject);
   const raw = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,

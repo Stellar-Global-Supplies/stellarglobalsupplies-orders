@@ -43,12 +43,19 @@ function buildGmailClient() {
   return google.gmail({ version: 'v1', auth });
 }
 
+function encodeMIMEHeader(str) {
+  if (/^[\x00-\xF7]*$/.test(str)) return str;
+  const encoded = Buffer.from(str, 'utf-8').toString('base64');
+  return `=?UTF-8?B?${encoded}?=`;
+}
+
 function buildRawMessage({ to, subject, html, text, from }) {
   const boundary = `boundary_${Date.now()}`;
+  const encodedSubject = encodeMIMEHeader(subject);
   const raw = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
     ``,
@@ -75,11 +82,12 @@ function buildRawMessage({ to, subject, html, text, from }) {
 function buildRawMessageWithAttachment({ to, subject, html, text, from, attachment, filename, mimeType }) {
   const boundary = `boundary_${Date.now()}`;
   const attachmentBase64 = attachment.toString('base64');
+  const encodedSubject = encodeMIMEHeader(subject);
 
   const raw = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/mixed; boundary="${boundary}"`,
     ``,
