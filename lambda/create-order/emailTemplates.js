@@ -292,9 +292,9 @@ function buildStatusUpdateEmail(order) {
   const subject = `${s.emoji} Order ${order.status} — #${orderId} | Stellar Global Supplies`;
 
   const MESSAGES = {
-    'Processing':        'Great news! Your order is now being processed by our team. We're carefully preparing everything to meet your specifications.',
-    'Ready to Dispatch': 'Your order is packed and ready to go! It will be dispatched very shortly. Get ready to receive your delivery.',
-    'Delivered':         'Your order has been successfully delivered. We hope you're completely satisfied. Thank you for trusting Stellar Global Supplies!',
+    'Processing':        "Great news! Your order is now being processed by our team. We're carefully preparing everything to meet your specifications.",
+    'Ready to Dispatch': "Your order is packed and ready to go! It will be dispatched very shortly. Get ready to receive your delivery.",
+    'Delivered':         "Your order has been successfully delivered. We hope you're completely satisfied. Thank you for trusting Stellar Global Supplies!",
   };
 
   const msg = MESSAGES[order.status] || 'Your order status has been updated. We will keep you informed as it progresses.';
