@@ -120,9 +120,9 @@ exports.handler = async (event) => {
   if (missing.length)
     return respond(400, { message: `Missing required fields: ${missing.join(', ')}` });
 
-   // Generate tracking token
-   const { randomUUID } = require('crypto');
-   const trackingToken = randomUUID();
+   // Generate tracking token (compatible with older Node.js versions)
+   const crypto = require('crypto');
+   const trackingToken = crypto.randomBytes(16).toString('hex');
 
    // Insert order
    const { data: order, error: insertErr } = await supabase
