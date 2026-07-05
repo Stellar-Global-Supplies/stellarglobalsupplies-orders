@@ -5,7 +5,7 @@ const BUSINESS_NUMBER = process.env.REACT_APP_WHATSAPP_NUMBER || '919637655556';
 const TRACK_BASE      = 'https://orders.stellarglobalsupplies.com/track';
 
 /**
- * FIX: Invoice pre-signed S3 URLs are 500+ characters — far too long for WhatsApp.
+ * FIX: Invoice pre-signed S3 URLs are 500+ characters -- far too long for WhatsApp.
  * Solution: Never send the raw S3 URL via WhatsApp. Instead:
  *  - Send the tracking page URL (always short: /track/{token})
  *  - The tracking page already shows the Download Invoice button
@@ -26,23 +26,23 @@ export function buildWhatsAppMessage(order) {
 
   const lines = [
     `*Stellar Global Supplies*`,
-    `Order Update 📦`,
+    `Order Update \u{1F4E6}`,
     ``,
     `Hello *${order.customer_name}*,`,
     ``,
     `Here's your order summary:`,
     ``,
-    `🔖 *#${orderId}*`,
-    `📦 ${order.product_type} — ${order.material}`,
-    `📐 ${order.quantity} ${order.unit}`,
-    `💰 ₹${fmt(order.sale_cost)} · ${order.payment_status}`,
-    `🚚 ${delivDate}`,
-    `✅ *${order.status}*`,
+    `\u{1F516} *#${orderId}*`,
+    `\u{1F4E6} ${order.product_type} -- ${order.material}`,
+    `\u{1F4D0} ${order.quantity} ${order.unit}`,
+    `\u{1F4B0} \u20B9${fmt(order.sale_cost)} - ${order.payment_status}`,
+    `\u{1F69A} ${delivDate}`,
+    `\u{2705} *${order.status}*`,
   ];
 
   if (trackingUrl) {
     lines.push(``);
-    lines.push(`🔗 *Track your order:*`);
+    lines.push(`\u{1F517} *Track your order:*`);
     lines.push(trackingUrl);
   }
 
@@ -51,22 +51,22 @@ export function buildWhatsAppMessage(order) {
   if (order.invoice_url) {
     lines.push(``);
     if (invoiceOk && trackingUrl) {
-      lines.push(`📄 *Invoice:* Download from your tracking page above`);
+      lines.push(`\u{1F4C4} *Invoice:* Download from your tracking page above`);
     } else if (invoiceOk && !trackingUrl) {
-      lines.push(`📄 *Invoice:* Check your email for the download link`);
+      lines.push(`\u{1F4C4} *Invoice:* Check your email for the download link`);
     } else {
-      lines.push(`📄 *Invoice:* Link expired — reply here to request a new copy`);
+      lines.push(`\u{1F4C4} *Invoice:* Link expired -- reply here to request a new copy`);
     }
   }
 
   if (order.payment_status !== 'Paid') {
     lines.push(``);
-    lines.push(`⚠ Kindly complete payment before delivery.`);
+    lines.push(`\u26A0 Kindly complete payment before delivery.`);
   }
 
   lines.push(``);
-  lines.push(`📞 +91 96376 55556`);
-  lines.push(`🌐 stellarglobalsupplies.com`);
+  lines.push(`\u{1F4DE} +91 96376 55556`);
+  lines.push(`\u{1F310} stellarglobalsupplies.com`);
 
   const phone = order.phone.replace(/\D/g, '');
   const wa    = phone.startsWith('91') ? phone : `91${phone}`;
@@ -81,23 +81,23 @@ export function buildBusinessWhatsAppMessage(order) {
     : 'TBD';
 
   const lines = [
-    `*New Order — Stellar OMS*`,
+    `*New Order -- Stellar OMS*`,
     ``,
-    `🔖 *#${orderId}*`,
-    `👤 ${order.customer_name}`,
-    `📱 ${order.phone}`,
-    `📧 ${order.email}`,
+    `\u{1F516} *#${orderId}*`,
+    `\u{1F464} ${order.customer_name}`,
+    `\u{1F4F1} ${order.phone}`,
+    `\u{1F4E7} ${order.email}`,
     ``,
-    `📦 ${order.product_type} · ${order.material}`,
-    `📐 ${order.quantity} ${order.unit}`,
-    `💰 ₹${fmt(order.sale_cost)} · ${order.payment_status}`,
-    `🚚 ${delivDate}`,
-    `📍 ${order.status}`,
+    `\u{1F4E6} ${order.product_type} - ${order.material}`,
+    `\u{1F4D0} ${order.quantity} ${order.unit}`,
+    `\u{1F4B0} \u20B9${fmt(order.sale_cost)} - ${order.payment_status}`,
+    `\u{1F69A} ${delivDate}`,
+    `\u{1F4CD} ${order.status}`,
   ];
 
   if (trackingUrl) {
     lines.push(``);
-    lines.push(`🔗 ${trackingUrl}`);
+    lines.push(`\u{1F517} ${trackingUrl}`);
   }
 
   return `https://wa.me/${BUSINESS_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
