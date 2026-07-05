@@ -10,7 +10,7 @@ const AWS              = require('aws-sdk');
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
-catch { emailTemplates = require('../create-order/emailTemplates'); }
+catch (e) { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildOrderConfirmationEmail, buildStatusUpdateEmail } = emailTemplates;
 
 const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -182,7 +182,7 @@ exports.handler = async (event) => {
   if (!orderId) return respond(400, { message: 'Order ID required' });
 
   let body = {};
-  try { body = JSON.parse(event.body || '{}'); } catch {}
+  try { body = JSON.parse(event.body || '{}'); } catch (e) {}
   const type = body.type || 'status_update'; // 'confirmation' | 'status_update'
 
   const { data: order, error: fetchErr } = await supabase

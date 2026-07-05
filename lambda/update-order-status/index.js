@@ -23,7 +23,7 @@ const PRESIGNED_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
-catch { emailTemplates = require('../create-order/emailTemplates'); }
+catch (e) { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildStatusUpdateEmail, buildDelayNotificationEmail } = emailTemplates;
 
 const supabase = createClient(
@@ -267,7 +267,7 @@ exports.handler = async (event) => {
   if (path.includes('/delay')) {
     let body = {};
     try { body = JSON.parse(event.body || '{}'); }
-    catch { return respond(400, { message: 'Invalid JSON' }); }
+    catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
     const { delivery_timeline } = body;
     if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
@@ -385,7 +385,7 @@ exports.handler = async (event) => {
   // ── Generic status update ─────────────────────────────────────────────────
   let body = {};
   try { body = JSON.parse(event.body || '{}'); }
-  catch { return respond(400, { message: 'Invalid JSON' }); }
+  catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
   const { status, payment_status } = body;
   if (!status || !VALID_STATUSES.includes(status))
