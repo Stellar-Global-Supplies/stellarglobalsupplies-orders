@@ -2,107 +2,103 @@ import { format } from 'date-fns';
 import { isInvoiceValid } from './api';
 
 const BUSINESS_NUMBER = process.env.REACT_APP_WHATSAPP_NUMBER || '919637655556';
+const TRACK_BASE      = 'https://orders.stellarglobalsupplies.com/track';
 
-export function buildWhatsAppMessage(order) {
-  const deliveryDate = order.delivery_timeline
-    ? format(new Date(order.delivery_timeline), 'dd MMM yyyy')
-    : 'TBD';
+/**
+ * FIX: Invoice pre-signed S3 URLs are 500+ characters — far too long for WhatsApp.
+ * Solution: Never send the raw S3 URL via WhatsApp. Instead:
+ *  - Send the tracking page URL (always short: /track/{token})
+ *  - The tracking page already shows the Download Invoice button
+ *  - If no tracking token, tell the customer to check their email
+ */
 
-  const lines = [
-    `*Stellar Global Supplies - Order Update*`,
-    ``,
-    `Dear *${order.customer_name}*,`,
-    ``,
-    `Your order details are as follows:`,
-    ``,
-    `*Order ID:* #${order.id.slice(0, 8).toUpperCase()}`,
-    `*Product:* ${order.product_type}`,
-    `*Material:* ${order.material}`,
-    `*Quantity:* ${order.quantity} ${order.unit}`,
-    `*Sale Cost:* Rs.${Number(order.sale_cost).toLocaleString('en-IN')}`,
-    `*Payment Status:* ${order.payment_status}`,
-    `*Delivery Timeline:* ${deliveryDate}`,
-    `*Order Status:* ${order.status}`,
-    ``,
-  ];
-
-  // Tracking URL
-  if (order.tracking_token) {
-    lines.push(`*Track your order:* https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`);
-    lines.push(``);
-  }
-
-  // FIX: Use shared isInvoiceValid helper for consistent expiry logic
-  if (order.invoice_url) {
-    if (isInvoiceValid(order)) {
-      lines.push(`*Invoice (valid for 7 days):* ${order.invoice_url}`);
-    } else {
-      lines.push(`*Invoice:* The download link has expired (valid for 7 days after delivery). Please contact us to request a new copy.`);
-    }
-    lines.push(``);
-  }
-
-  // Payment reminder
-  if (order.payment_status !== 'Paid') {
-    lines.push(`*Note:* Please pay the remaining amount (if any) before delivery.`);
-    lines.push(``);
-  }
-
-  lines.push(`For any queries, call us at +91 96376 55556.`);
-  lines.push(``);
-  lines.push(`Visit: stellarglobalsupplies.com for more products.`);
-  lines.push(``);
-  lines.push(`Thank you for choosing Stellar Global Supplies!`);
-  lines.push(`_India's Most Reliable Industrial Supply Partner_`);
-
-  const message = encodeURIComponent(lines.join('\n'));
-  const phone = order.phone.replace(/\D/g, '');
-  const whatsappPhone = phone.startsWith('91') ? phone : `91${phone}`;
-
-  return `https://wa.me/${whatsappPhone}?text=${message}`;
+function fmt(n) {
+  return Number(n).toLocaleString('en-IN');
 }
 
-export function buildBusinessWhatsAppMessage(order) {
-  const deliveryDate = order.delivery_timeline
+export function buildWhatsAppMessage(order) {
+  const orderId     = order.id.slice(0, 8).toUpperCase();
+  const trackingUrl = order.tracking_token ? `${TRACK_BASE}/${order.tracking_token}` : null;
+  const delivDate   = order.delivery_timeline
     ? format(new Date(order.delivery_timeline), 'dd MMM yyyy')
     : 'TBD';
-
-  const trackingUrl = order.tracking_token
-    ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
-    : null;
+  const invoiceOk = isInvoiceValid(order);
 
   const lines = [
-    `*New Order Received - Stellar OMS*`,
+    `*Stellar Global Supplies*`,
+    `Order Update 📦`,
     ``,
-    `*Order ID:* #${order.id.slice(0, 8).toUpperCase()}`,
-    `*Customer:* ${order.customer_name}`,
-    `*Phone:* ${order.phone}`,
-    `*Email:* ${order.email}`,
+    `Hello *${order.customer_name}*,`,
     ``,
-    `*Product:* ${order.product_type}`,
-    `*Material:* ${order.material}`,
-    `*Quantity:* ${order.quantity} ${order.unit}`,
-    `*Sale Cost:* Rs.${Number(order.sale_cost).toLocaleString('en-IN')}`,
-    `*Payment:* ${order.payment_status}`,
-    `*Delivery:* ${deliveryDate}`,
+    `Here's your order summary:`,
     ``,
-    `*Status:* ${order.status}`,
+    `🔖 *#${orderId}*`,
+    `📦 ${order.product_type} — ${order.material}`,
+    `📐 ${order.quantity} ${order.unit}`,
+    `💰 ₹${fmt(order.sale_cost)} · ${order.payment_status}`,
+    `🚚 ${delivDate}`,
+    `✅ *${order.status}*`,
   ];
 
   if (trackingUrl) {
-    lines.push(`*Track Order:* ${trackingUrl}`);
     lines.push(``);
+    lines.push(`🔗 *Track your order:*`);
+    lines.push(trackingUrl);
   }
 
+  // FIX: instead of the raw S3 URL, point to the tracking page where
+  // the invoice button lives. The URL stays short and always works.
   if (order.invoice_url) {
-    if (isInvoiceValid(order)) {
-      lines.push(`*Invoice:* ${order.invoice_url}`);
-    } else {
-      lines.push(`*Invoice:* Link expired — contact customer to resend`);
-    }
     lines.push(``);
+    if (invoiceOk && trackingUrl) {
+      lines.push(`📄 *Invoice:* Download from your tracking page above`);
+    } else if (invoiceOk && !trackingUrl) {
+      lines.push(`📄 *Invoice:* Check your email for the download link`);
+    } else {
+      lines.push(`📄 *Invoice:* Link expired — reply here to request a new copy`);
+    }
   }
 
-  const message = encodeURIComponent(lines.join('\n'));
-  return `https://wa.me/${BUSINESS_NUMBER}?text=${message}`;
+  if (order.payment_status !== 'Paid') {
+    lines.push(``);
+    lines.push(`⚠ Kindly complete payment before delivery.`);
+  }
+
+  lines.push(``);
+  lines.push(`📞 +91 96376 55556`);
+  lines.push(`🌐 stellarglobalsupplies.com`);
+
+  const phone = order.phone.replace(/\D/g, '');
+  const wa    = phone.startsWith('91') ? phone : `91${phone}`;
+  return `https://wa.me/${wa}?text=${encodeURIComponent(lines.join('\n'))}`;
+}
+
+export function buildBusinessWhatsAppMessage(order) {
+  const orderId     = order.id.slice(0, 8).toUpperCase();
+  const trackingUrl = order.tracking_token ? `${TRACK_BASE}/${order.tracking_token}` : null;
+  const delivDate   = order.delivery_timeline
+    ? format(new Date(order.delivery_timeline), 'dd MMM yyyy')
+    : 'TBD';
+
+  const lines = [
+    `*New Order — Stellar OMS*`,
+    ``,
+    `🔖 *#${orderId}*`,
+    `👤 ${order.customer_name}`,
+    `📱 ${order.phone}`,
+    `📧 ${order.email}`,
+    ``,
+    `📦 ${order.product_type} · ${order.material}`,
+    `📐 ${order.quantity} ${order.unit}`,
+    `💰 ₹${fmt(order.sale_cost)} · ${order.payment_status}`,
+    `🚚 ${delivDate}`,
+    `📍 ${order.status}`,
+  ];
+
+  if (trackingUrl) {
+    lines.push(``);
+    lines.push(`🔗 ${trackingUrl}`);
+  }
+
+  return `https://wa.me/${BUSINESS_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
 }
