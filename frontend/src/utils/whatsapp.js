@@ -61,7 +61,7 @@ export function buildWhatsAppMessage(order) {
 
   if (order.payment_status !== 'Paid') {
     lines.push(``);
-    lines.push(`\u{1F4B3} *Payment Reminder*`);
+    lines.push(`\u26A0\u26A0 *Payment Reminder*`);
     lines.push(`Your payment status: *${order.payment_status}*`);
     lines.push(`We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!`);
   }

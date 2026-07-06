@@ -235,7 +235,7 @@ function buildOrderConfirmationEmail(order) {
             We'll send you email updates at every stage of your order.
             Expected delivery by <strong style="color:${B.navy};">${formatDate(order.delivery_timeline)}</strong>.
             ${order.payment_status !== 'Paid'
-              ? `<br/><br/><span style="color:#64748B;font-weight:600;">💝 Payment Reminder:</span> We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!`
+              ? `<br/><br/><span style="color:#64748B;font-weight:600;">⚠️ Payment Reminder:</span> We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!`
               : ''}
           </td>
         </tr>
@@ -342,7 +342,7 @@ function buildStatusUpdateEmail(order) {
       <tr>
         <td style="background:#fff;padding:14px 18px;border-bottom:1px solid #F1F5F9;">
           <div style="font-size:14px;font-weight:600;color:#64748B;letter-spacing:0.3px;">
-            💝 Payment Reminder
+            ⚠️ Payment Reminder
           </div>
         </td>
       </tr>

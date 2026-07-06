@@ -271,7 +271,7 @@ export default function TrackOrderPage() {
              animation: 'fadeUp .5s ease',
            }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-               <div style={{ fontSize: 28 }}>💝</div>
+               <div style={{ fontSize: 28 }}>⚠️</div>
                <div>
                  <div style={{ fontSize: 16, fontWeight: 800, color: '#B45309', marginBottom: 4 }}>
                    Payment Reminder
