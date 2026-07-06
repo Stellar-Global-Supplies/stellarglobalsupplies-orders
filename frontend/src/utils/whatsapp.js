@@ -61,7 +61,10 @@ export function buildWhatsAppMessage(order) {
 
   if (order.payment_status !== 'Paid') {
     lines.push(``);
-    lines.push(`\u26A0 Kindly complete payment before delivery.`);
+    lines.push(`\u26A0\u26A0 *URGENT: Payment Required*`);
+    lines.push(`Your payment status: *${order.payment_status}*`);
+    lines.push(`Please complete payment at the earliest to avoid delivery delays.`);
+    lines.push(`Contact us on WhatsApp or email: stellarglobalsupplies@gmail.com`);
   }
 
   lines.push(``);
