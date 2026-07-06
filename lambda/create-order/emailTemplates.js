@@ -235,7 +235,7 @@ function buildOrderConfirmationEmail(order) {
             We'll send you email updates at every stage of your order.
             Expected delivery by <strong style="color:${B.navy};">${formatDate(order.delivery_timeline)}</strong>.
             ${order.payment_status !== 'Paid'
-              ? `<br/><br/><span style="color:#B45309;font-weight:700;">⚠️ Payment Reminder:</span> Please ensure payment is completed before delivery. Contact us on WhatsApp or email: <a href="mailto:stellarglobalsupplies@gmail.com" style="color:#00B98E;text-decoration:none;">stellarglobalsupplies@gmail.com</a>`
+              ? `<br/><br/><span style="color:#64748B;font-weight:600;">💝 Payment Reminder:</span> We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!`
               : ''}
           </td>
         </tr>
@@ -338,27 +338,21 @@ function buildStatusUpdateEmail(order) {
 
     ${order.payment_status !== 'Paid' ? `
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
-      style="background:#FFFBEB;border:2px solid #F59E0B;border-radius:12px;margin-top:16px;overflow:hidden;">
+      style="background:#F8FAFB;border:1.5px solid #E2E8F0;border-radius:12px;margin-top:16px;overflow:hidden;">
       <tr>
-        <td style="background:linear-gradient(135deg, #F59E0B 0%, #D97706 100%);padding:12px 18px;">
-          <div style="font-size:14px;font-weight:800;color:#fff;letter-spacing:0.3px;">
-            ⚠️ URGENT: PAYMENT REQUIRED
+        <td style="background:#fff;padding:14px 18px;border-bottom:1px solid #F1F5F9;">
+          <div style="font-size:14px;font-weight:600;color:#64748B;letter-spacing:0.3px;">
+            💝 Payment Reminder
           </div>
         </td>
       </tr>
       <tr>
         <td style="padding:16px 18px;">
-          <div style="font-size:13px;color:#B45309;line-height:1.7;margin-bottom:12px;">
-            <strong>Your payment status: ${order.payment_status}</strong>
+          <div style="font-size:13px;color:#64748B;line-height:1.7;margin-bottom:10px;">
+            Your payment status: <strong>${order.payment_status}</strong>
           </div>
-          <div style="background:#fff;border-left:3px solid #F59E0B;padding:10px 14px;margin-bottom:12px;">
-            <div style="font-size:13px;color:#92400E;line-height:1.6;font-weight:600;">
-              Please complete your payment at the earliest to avoid any delays in delivery.
-            </div>
-          </div>
-          <div style="font-size:12px;color:#64748B;line-height:1.6;">
-            💬 <strong>Pay via WhatsApp:</strong> +91 96376 55556<br/>
-            📧 <strong>Pay via Email:</strong> <a href="mailto:stellarglobalsupplies@gmail.com" style="color:#00B98E;text-decoration:none;font-weight:600;">stellarglobalsupplies@gmail.com</a>
+          <div style="font-size:13px;color:#64748B;line-height:1.6;">
+            We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!
           </div>
         </td>
       </tr>
