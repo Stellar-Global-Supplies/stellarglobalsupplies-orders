@@ -40,7 +40,7 @@ CREATE POLICY "Authenticated users can update order items"
   TO authenticated
   USING (true)
   WITH CHECK (true);
-
+ 
 -- Authenticated users can delete order items
 CREATE POLICY "Authenticated users can delete order items"
   ON public.order_items FOR DELETE
