@@ -131,7 +131,8 @@ function ProductsTable({ products }) {
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Product</th>
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Material</th>
             <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Qty</th>
-            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Unit Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Total</th>
           </tr>
         </thead>
         <tbody>
@@ -142,13 +143,16 @@ function ProductsTable({ products }) {
                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
                  {p.quantity} {p.unit}
                </td>
+               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#1A202C' }}>
+                 ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
+               </td>
                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600, color: '#1A202C' }}>
                  ₹{Number(p.sale_cost).toLocaleString('en-IN')}
                </td>
              </tr>
            ))}
           <tr style={{ background: '#E6F7F3' }}>
-            <td colSpan={3} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
+            <td colSpan={4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>

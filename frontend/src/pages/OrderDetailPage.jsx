@@ -60,16 +60,20 @@ function ProductsTable({ products }) {
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Product</th>
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Material</th>
             <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Qty</th>
-            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Unit Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Total</th>
           </tr>
         </thead>
         <tbody>
           {products.map((p, i) => (
             <tr key={i} style={{ background: i % 2 === 0 ? 'var(--neutral-50)' : '#fff' }}>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)' }}>{p.product_type}</td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)' }}>{p.material}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.product_type}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.material}</td>
               <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--neutral-500)' }}>
                 {p.quantity} {p.unit}
+              </td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--neutral-800)' }}>
+                ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
               </td>
               <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', fontWeight: 600 }}>
                 ₹{Number(p.sale_cost).toLocaleString('en-IN')}
@@ -77,7 +81,7 @@ function ProductsTable({ products }) {
             </tr>
           ))}
           <tr style={{ background: 'var(--brand-teal-light)' }}>
-            <td colSpan={3} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right' }}>Total</td>
+            <td colSpan={4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right' }}>Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: 'var(--brand-teal)' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>

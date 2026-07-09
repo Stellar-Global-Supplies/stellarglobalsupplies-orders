@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.order_items (
   material      TEXT         NOT NULL,
   quantity      NUMERIC      NOT NULL CHECK (quantity > 0),
   unit          TEXT         NOT NULL DEFAULT 'Pieces' CHECK (unit IN ('Pieces', 'Kgs')),
+  unit_cost     NUMERIC      NOT NULL CHECK (unit_cost >= 0),
   sale_cost     NUMERIC      NOT NULL CHECK (sale_cost >= 0),
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );

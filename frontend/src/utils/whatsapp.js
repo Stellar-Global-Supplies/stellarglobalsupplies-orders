@@ -50,7 +50,8 @@ export function buildWhatsAppMessage(order, orderItems = null) {
   products.forEach((p, i) => {
     lines.push(`📦 ${p.product_type} - ${p.material}`);
     lines.push(`📐 ${p.quantity} ${p.unit}`);
-    lines.push(`💰 ₹${fmt(p.sale_cost)}`);
+    if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
+    lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
     if (i < products.length - 1) lines.push(``);
   });
 
@@ -131,7 +132,8 @@ export function buildBusinessWhatsAppMessage(order, orderItems = null) {
   products.forEach((p, i) => {
     lines.push(`📦 ${p.product_type} - ${p.material}`);
     lines.push(`📐 ${p.quantity} ${p.unit}`);
-    lines.push(`💰 ₹${fmt(p.sale_cost)}`);
+    if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
+    lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
     if (i < products.length - 1) lines.push(``);
   });
 

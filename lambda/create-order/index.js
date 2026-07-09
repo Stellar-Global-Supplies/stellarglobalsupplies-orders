@@ -194,6 +194,7 @@ exports.handler = async (event) => {
     material:     p.material,
     quantity:     Number(p.quantity),
     unit:         p.unit || 'Pieces',
+    unit_cost:    Number(p.unit_cost) || 0,
     sale_cost:    Number(p.sale_cost),
   }));
 

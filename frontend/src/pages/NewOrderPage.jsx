@@ -28,6 +28,7 @@ const EMPTY_PRODUCT = {
   material:     '',
   quantity:     '',
   unit:         'Pieces',
+  unit_cost:    '',
   sale_cost:    '',
 };
 
@@ -73,7 +74,16 @@ export default function NewOrderPage() {
     const value = e?.target ? e.target.value : e;
     setProducts((prev) => {
       const newProducts = [...prev];
-      newProducts[index] = { ...newProducts[index], [key]: value };
+      const current = { ...newProducts[index], [key]: value };
+      
+      // Auto-calculate sale_cost when unit_cost or quantity changes
+      if (key === 'unit_cost' || key === 'quantity') {
+        const unitCost = parseFloat(key === 'unit_cost' ? value : current.unit_cost) || 0;
+        const qty = parseFloat(key === 'quantity' ? value : current.quantity) || 0;
+        current.sale_cost = (unitCost * qty).toFixed(2);
+      }
+      
+      newProducts[index] = current;
       return newProducts;
     });
   };
@@ -185,7 +195,7 @@ export default function NewOrderPage() {
               </span>
             </div>
             <div className="card-body">
-              <div className="form-grid">
+                    <div className="form-grid-3">
                 <Field label="Customer Name" required error={errors.customer_name}>
                   <input
                     className={`form-control${errors.customer_name ? ' error' : ''}`}
@@ -314,6 +324,33 @@ export default function NewOrderPage() {
                       </div>
                     </Field>
 
+                    {/* Unit Cost */}
+                    <Field label="Unit Cost (₹)" required error={errors[`product_${index}_unit_cost`]}>
+                      <div className="input-group">
+                        <span
+                          style={{
+                            display: 'flex', alignItems: 'center',
+                            padding: '0 12px',
+                            background: 'var(--neutral-100)',
+                            border: '1.5px solid var(--neutral-200)',
+                            borderRight: 'none',
+                            borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
+                            fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
+                          }}
+                        >₹</span>
+                        <input
+                          className={`form-control${errors[`product_${index}_unit_cost`] ? ' error' : ''}`}
+                          style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none' }}
+                          placeholder="0.00"
+                          value={product.unit_cost}
+                          onChange={(e) => { setProduct(index, 'unit_cost')(e); clearError(`product_${index}_unit_cost`); }}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </Field>
+
                     {/* Quantity + Unit */}
                     <Field label="Quantity" required error={errors[`product_${index}_quantity`]}>
                       <div className="input-group">
@@ -348,7 +385,7 @@ export default function NewOrderPage() {
                       </div>
                     </Field>
 
-                    {/* Sale Cost */}
+                    {/* Sale Cost (auto-calculated) */}
                     <Field label="Sale Cost (₹)" required error={errors[`product_${index}_sale_cost`]}>
                       <div className="input-group">
                         <span
