@@ -135,18 +135,18 @@ function ProductsTable({ products }) {
           </tr>
         </thead>
         <tbody>
-          {products.map((p, i) => (
-            <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9' }}>{p.product_type}</td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9' }}>{p.material}</td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
-                {p.quantity} {p.unit}
-              </td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600 }}>
-                ₹{Number(p.sale_cost).toLocaleString('en-IN')}
-              </td>
-            </tr>
-          ))}
+           {products.map((p, i) => (
+             <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
+               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.product_type}</td>
+               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.material}</td>
+               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
+                 {p.quantity} {p.unit}
+               </td>
+               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600, color: '#1A202C' }}>
+                 ₹{Number(p.sale_cost).toLocaleString('en-IN')}
+               </td>
+             </tr>
+           ))}
           <tr style={{ background: '#E6F7F3' }}>
             <td colSpan={3} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
