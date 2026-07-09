@@ -78,8 +78,9 @@ export default function NewOrderPage() {
       
       // Auto-calculate sale_cost when unit_cost or quantity changes
       if (key === 'unit_cost' || key === 'quantity') {
-        const unitCost = parseFloat(key === 'unit_cost' ? value : current.unit_cost) || 0;
-        const qty = parseFloat(key === 'quantity' ? value : current.quantity) || 0;
+        // Get the current values (after the update)
+        const unitCost = parseFloat(current.unit_cost) || 0;
+        const qty = parseFloat(current.quantity) || 0;
         current.sale_cost = (unitCost * qty).toFixed(2);
       }
       
@@ -117,21 +118,22 @@ export default function NewOrderPage() {
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email address';
     if (!form.delivery_timeline)    errs.delivery_timeline = 'Select a delivery date';
 
-    // Validate each product
-    products.forEach((p, idx) => {
-      // For product_type, check if it's a valid selection or a custom value
-      if (!p.product_type || p.product_type === 'custom_other') {
-        errs[`product_${idx}_product_type`] = 'Select a product type or enter custom value';
-      }
-      // For material, check if it's a valid selection or a custom value
-      if (!p.material || p.material === 'custom_other') {
-        errs[`product_${idx}_material`] = 'Select a material or enter custom value';
-      }
-      if (!p.quantity || isNaN(p.quantity) || Number(p.quantity) <= 0)
-        errs[`product_${idx}_quantity`] = 'Enter a valid quantity';
-      if (!p.sale_cost || isNaN(p.sale_cost) || Number(p.sale_cost) <= 0)
-        errs[`product_${idx}_sale_cost`] = 'Enter a valid sale cost';
-    });
+  // Validate each product
+  products.forEach((p, idx) => {
+    // For product_type, check if it's a valid selection or a custom value
+    if (!p.product_type || p.product_type === 'custom_other') {
+      errs[`product_${idx}_product_type`] = 'Select a product type or enter custom value';
+    }
+    // For material, check if it's a valid selection or a custom value
+    if (!p.material || p.material === 'custom_other') {
+      errs[`product_${idx}_material`] = 'Select a material or enter custom value';
+    }
+    if (!p.quantity || isNaN(p.quantity) || Number(p.quantity) <= 0)
+      errs[`product_${idx}_quantity`] = 'Enter a valid quantity';
+    // sale_cost is auto-calculated, but validate it exists
+    if (!p.sale_cost || isNaN(p.sale_cost) || Number(p.sale_cost) < 0)
+      errs[`product_${idx}_sale_cost`] = 'Enter a valid sale cost';
+  });
 
     return errs;
   };
@@ -152,6 +154,7 @@ export default function NewOrderPage() {
           material:     p.material,
           quantity:     Number(p.quantity),
           unit:         p.unit || 'Pieces',
+          unit_cost:    Number(p.unit_cost) || 0,
           sale_cost:    Number(p.sale_cost),
         })),
       };
@@ -324,8 +327,8 @@ export default function NewOrderPage() {
                       </div>
                     </Field>
 
-                    {/* Unit Cost */}
-                    <Field label="Unit Cost (₹)" required error={errors[`product_${index}_unit_cost`]}>
+                    {/* Unit Cost (auto-calculates sale cost) */}
+                    <Field label="Unit Cost (₹)" error={errors[`product_${index}_unit_cost`]}>
                       <div className="input-group">
                         <span
                           style={{
