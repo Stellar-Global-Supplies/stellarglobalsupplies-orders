@@ -297,12 +297,12 @@ exports.handler = async (event) => {
 
      if (updateErr) { console.error('Delay error:', updateErr); return respond(500, { message: 'Failed to delay order' }); }
 
-     // Fetch order items for email
-     const { data: orderItems, error: itemsErr } = await supabase
-       .from('order_items')
-       .select('product_type, material, quantity, unit, sale_cost')
-       .eq('order_id', orderId)
-       .order('created_at', { ascending: true });
+      // Fetch order items for email
+      const { data: orderItems, error: itemsErr } = await supabase
+        .from('order_items')
+        .select('product_type, material, quantity, unit, unit_cost, sale_cost')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
 
      try {
        const { subject, html, text } = buildDelayNotificationEmail(updated, orderItems || []);
@@ -397,7 +397,7 @@ exports.handler = async (event) => {
     // Fetch order items for email
     const { data: orderItems, error: itemsErr } = await supabase
       .from('order_items')
-      .select('product_type, material, quantity, unit, sale_cost')
+      .select('product_type, material, quantity, unit, unit_cost, sale_cost')
       .eq('order_id', orderId)
       .order('created_at', { ascending: true });
 
@@ -434,7 +434,7 @@ exports.handler = async (event) => {
     updated_at: new Date().toISOString(),
     updated_by: user.id,
   };
-  if (payment_status && ['Pending', 'Partial', 'Paid'].includes(payment_status)) {
+  if (payment_status && ['Pending', 'Partial', 'Paid', 'After 30 days'].includes(payment_status)) {
     updatePayload.payment_status = payment_status;
   }
 
