@@ -234,11 +234,12 @@ function buildOrderConfirmationEmail(order, products = null) {
 
   // Use products array if provided, otherwise fall back to single product
   const hasMultipleProducts = products && products.length > 1;
-  const productsList = products || [{
+  const productsList = products && products.length > 0 ? products : [{
     product_type: order.product_type,
     material:     order.material,
     quantity:     order.quantity,
     unit:         order.unit,
+    unit_cost:    0,
     sale_cost:    order.sale_cost,
   }];
 
@@ -349,11 +350,12 @@ function buildStatusUpdateEmail(order, products = null) {
 
   // Use products array if provided, otherwise fall back to single product
   const hasMultipleProducts = products && products.length > 1;
-  const productsList = products || [{
+  const productsList = products && products.length > 0 ? products : [{
     product_type: order.product_type,
     material:     order.material,
     quantity:     order.quantity,
     unit:         order.unit,
+    unit_cost:    0,
     sale_cost:    order.sale_cost,
   }];
 
@@ -497,11 +499,12 @@ function buildDelayNotificationEmail(order, products = null) {
 
   // Use products array if provided, otherwise fall back to single product
   const hasMultipleProducts = products && products.length > 1;
-  const productsList = products || [{
+  const productsList = products && products.length > 0 ? products : [{
     product_type: order.product_type,
     material:     order.material,
     quantity:     order.quantity,
     unit:         order.unit,
+    unit_cost:    0,
     sale_cost:    order.sale_cost,
   }];
 
