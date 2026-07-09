@@ -203,9 +203,16 @@ exports.handler = async (event) => {
     .from('orders').select('*').eq('id', orderId).single();
   if (fetchErr || !order) return respond(404, { message: 'Order not found' });
 
+  // Fetch order items for email
+  const { data: orderItems, error: itemsErr } = await supabase
+    .from('order_items')
+    .select('product_type, material, quantity, unit, sale_cost')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+
   try {
     const builder  = type === 'confirmation' ? buildOrderConfirmationEmail : buildStatusUpdateEmail;
-    const { subject, html, text } = builder(order);
+    const { subject, html, text } = builder(order, orderItems || []);
     // Pass invoice URL for status update emails to include as attachment
     const invoiceUrl = type === 'status_update' ? order.invoice_url : null;
     await sendEmail({ to: order.email, subject, html, text, invoiceUrl });

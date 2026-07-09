@@ -277,33 +277,40 @@ exports.handler = async (event) => {
 
   const path = event.path || event.rawPath || '';
 
-  // ── Delay endpoint ────────────────────────────────────────────────────────
-  if (path.includes('/delay')) {
-    let body = {};
-    try { body = JSON.parse(event.body || '{}'); }
-    catch (e) { return respond(400, { message: 'Invalid JSON' }); }
+// ── Delay endpoint ────────────────────────────────────────────────────────
+   if (path.includes('/delay')) {
+     let body = {};
+     try { body = JSON.parse(event.body || '{}'); }
+     catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
-    const { delivery_timeline } = body;
-    if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
+     const { delivery_timeline } = body;
+     if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
 
-    const { data: currentOrder, error: fetchErr } = await supabase
-      .from('orders').select('*').eq('id', orderId).single();
-    if (fetchErr || !currentOrder) return respond(404, { message: 'Order not found' });
+     const { data: currentOrder, error: fetchErr } = await supabase
+       .from('orders').select('*').eq('id', orderId).single();
+     if (fetchErr || !currentOrder) return respond(404, { message: 'Order not found' });
 
-    const { data: updated, error: updateErr } = await supabase
-      .from('orders')
-      .update({ delivery_timeline, updated_at: new Date().toISOString(), updated_by: user.id })
-      .eq('id', orderId).select().single();
+     const { data: updated, error: updateErr } = await supabase
+       .from('orders')
+       .update({ delivery_timeline, updated_at: new Date().toISOString(), updated_by: user.id })
+       .eq('id', orderId).select().single();
 
-    if (updateErr) { console.error('Delay error:', updateErr); return respond(500, { message: 'Failed to delay order' }); }
+     if (updateErr) { console.error('Delay error:', updateErr); return respond(500, { message: 'Failed to delay order' }); }
 
-    try {
-      const { subject, html, text } = buildDelayNotificationEmail(updated);
-      await sendEmail({ to: updated.email, subject, html, text });
-    } catch (e) { console.error('Delay email error (non-fatal):', e.message); }
+     // Fetch order items for email
+     const { data: orderItems, error: itemsErr } = await supabase
+       .from('order_items')
+       .select('product_type, material, quantity, unit, sale_cost')
+       .eq('order_id', orderId)
+       .order('created_at', { ascending: true });
 
-    return respond(200, updated);
-  }
+     try {
+       const { subject, html, text } = buildDelayNotificationEmail(updated, orderItems || []);
+       await sendEmail({ to: updated.email, subject, html, text });
+     } catch (e) { console.error('Delay email error (non-fatal):', e.message); }
+
+     return respond(200, updated);
+   }
 
   // ── Deliver endpoint ───────────────────────────────────────────────────────
   if (path.includes('/deliver')) {
@@ -387,9 +394,16 @@ exports.handler = async (event) => {
 
     if (updateErr) { console.error('Deliver error:', updateErr); return respond(500, { message: 'Failed to mark as delivered' }); }
 
+    // Fetch order items for email
+    const { data: orderItems, error: itemsErr } = await supabase
+      .from('order_items')
+      .select('product_type, material, quantity, unit, sale_cost')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true });
+
     // Send delivery email with invoice attachment (using S3 key, not URL)
     try {
-      const { subject, html, text } = buildStatusUpdateEmail(updated);
+      const { subject, html, text } = buildStatusUpdateEmail(updated, orderItems || []);
       await sendEmail({ to: updated.email, subject, html, text, invoiceS3Key });
     } catch (e) { console.error('Delivery email error (non-fatal):', e.message); }
 
@@ -429,8 +443,15 @@ exports.handler = async (event) => {
 
   if (updateErr) { console.error('Update error:', updateErr); return respond(500, { message: 'Failed to update order' }); }
 
+  // Fetch order items for email
+  const { data: orderItems, error: itemsErr } = await supabase
+    .from('order_items')
+    .select('product_type, material, quantity, unit, sale_cost')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+
   try {
-    const { subject, html, text } = buildStatusUpdateEmail(updated);
+    const { subject, html, text } = buildStatusUpdateEmail(updated, orderItems || []);
     await sendEmail({ to: updated.email, subject, html, text });
   } catch (e) { console.error('Status email error (non-fatal):', e.message); }
 
