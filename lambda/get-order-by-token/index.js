@@ -55,9 +55,9 @@ exports.handler = async (event) => {
   const token = event.pathParameters?.token;
   if (!token) return respond(400, { message: 'Tracking token required' });
 
-  // Validate UUID format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(token)) {
+  // Validate tracking token format (32-character hex string)
+  const tokenRegex = /^[0-9a-f]{32}$/i;
+  if (!tokenRegex.test(token)) {
     return respond(400, { message: 'Invalid tracking token format' });
   }
 
@@ -72,7 +72,14 @@ exports.handler = async (event) => {
     return respond(404, { message: 'Order not found or invalid tracking token' });
   }
 
-  // Return public order data
+  // Fetch order items
+  const { data: orderItems, error: itemsErr } = await supabase
+    .from('order_items')
+    .select('product_type, material, quantity, unit, sale_cost')
+    .eq('order_id', order.id)
+    .order('created_at', { ascending: true });
+
+  // Return public order data with order items
   return respond(200, {
     id: order.id,
     customer_name: order.customer_name,
@@ -86,5 +93,6 @@ exports.handler = async (event) => {
     created_at: order.created_at,
     invoice_url: order.invoice_url,
     invoice_uploaded_at: order.invoice_uploaded_at,
+    order_items: itemsErr ? [] : (orderItems || []),
   });
 };

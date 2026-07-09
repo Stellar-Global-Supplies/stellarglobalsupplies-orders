@@ -22,15 +22,20 @@ function Field({ label, required, children, error }) {
   );
 }
 
+// Empty product item for the form
+const EMPTY_PRODUCT = {
+  product_type: '',
+  material:     '',
+  quantity:     '',
+  unit:         'Pieces',
+  sale_cost:    '',
+};
+
+// Empty form state
 const EMPTY_FORM = {
   customer_name:     '',
   phone:             '',
   email:             '',
-  product_type:      '',
-  material:          '',
-  quantity:          '',
-  unit:              'Pieces',
-  sale_cost:         '',
   payment_status:    'Pending',
   delivery_timeline: null,
 };
@@ -43,8 +48,9 @@ export default function NewOrderPage() {
   const [skuLoading,  setSkuLoading]  = useState(true);
   const [matLoading,  setMatLoading]  = useState(true);
   const [submitting,  setSubmitting]  = useState(false);
-  const [form,   setForm]   = useState(EMPTY_FORM);
-  const [errors, setErrors] = useState({});
+  const [form,      setForm]      = useState(EMPTY_FORM);
+  const [products,  setProducts]  = useState([EMPTY_PRODUCT]); // Array of products
+  const [errors,    setErrors]    = useState({});
 
   useEffect(() => {
     // top_sku view → skus column
@@ -63,8 +69,35 @@ export default function NewOrderPage() {
   const set = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e?.target ? e.target.value : e }));
 
+  const setProduct = (index, key) => (e) => {
+    const value = e?.target ? e.target.value : e;
+    setProducts((prev) => {
+      const newProducts = [...prev];
+      newProducts[index] = { ...newProducts[index], [key]: value };
+      return newProducts;
+    });
+  };
+
+  const addProduct = () => {
+    setProducts((prev) => [...prev, { ...EMPTY_PRODUCT }]);
+  };
+
+  const removeProduct = (index) => {
+    if (products.length === 1) {
+      toast.error('At least one product is required');
+      return;
+    }
+    setProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const clearError = (key) =>
     setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
+
+  // Calculate total cost from all products
+  const totalCost = products.reduce((sum, p) => {
+    const cost = parseFloat(p.sale_cost) || 0;
+    return sum + cost;
+  }, 0);
 
   const validate = () => {
     const errs = {};
@@ -72,13 +105,24 @@ export default function NewOrderPage() {
     if (!form.phone.trim())         errs.phone         = 'Phone number is required';
     if (!form.email.trim())         errs.email         = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email address';
-    if (!form.product_type)         errs.product_type  = 'Select a product type';
-    if (!form.material)             errs.material      = 'Select a material';
-    if (!form.quantity || isNaN(form.quantity) || Number(form.quantity) <= 0)
-      errs.quantity  = 'Enter a valid quantity';
-    if (!form.sale_cost || isNaN(form.sale_cost) || Number(form.sale_cost) <= 0)
-      errs.sale_cost = 'Enter a valid sale cost';
     if (!form.delivery_timeline)    errs.delivery_timeline = 'Select a delivery date';
+
+    // Validate each product
+    products.forEach((p, idx) => {
+      // For product_type, check if it's a valid selection or a custom value
+      if (!p.product_type || p.product_type === 'custom_other') {
+        errs[`product_${idx}_product_type`] = 'Select a product type or enter custom value';
+      }
+      // For material, check if it's a valid selection or a custom value
+      if (!p.material || p.material === 'custom_other') {
+        errs[`product_${idx}_material`] = 'Select a material or enter custom value';
+      }
+      if (!p.quantity || isNaN(p.quantity) || Number(p.quantity) <= 0)
+        errs[`product_${idx}_quantity`] = 'Enter a valid quantity';
+      if (!p.sale_cost || isNaN(p.sale_cost) || Number(p.sale_cost) <= 0)
+        errs[`product_${idx}_sale_cost`] = 'Enter a valid sale cost';
+    });
+
     return errs;
   };
 
@@ -91,10 +135,15 @@ export default function NewOrderPage() {
     try {
       const payload = {
         ...form,
-        quantity:          Number(form.quantity),
-        sale_cost:         Number(form.sale_cost),
         delivery_timeline: form.delivery_timeline?.toISOString().split('T')[0],
         status:            'Order Received',
+        products:          products.map(p => ({
+          product_type: p.product_type,
+          material:     p.material,
+          quantity:     Number(p.quantity),
+          unit:         p.unit || 'Pieces',
+          sale_cost:    Number(p.sale_cost),
+        })),
       };
       const result = await createOrder(payload);
       toast.success('Order created successfully!');
@@ -169,104 +218,211 @@ export default function NewOrderPage() {
             </div>
           </div>
 
-          {/* ── Section 2: Order Details ── */}
+          {/* ── Section 2: Products ── */}
           <div className="card" style={{ marginBottom: 24 }}>
             <div className="card-header">
               <span className="card-title">
                 <span style={{ color: 'var(--brand-teal)', marginRight: 8 }}>②</span>
-                Order Details
+                Products
+              </span>
+            </div>
+            <div className="card-body">
+              {products.map((product, index) => (
+                <div key={index} style={{
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '16px',
+                  marginBottom: index < products.length - 1 ? 16 : 0,
+                  background: 'var(--neutral-50)',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--neutral-700)' }}>
+                      Product #{index + 1}
+                    </span>
+                    {products.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => removeProduct(index)}
+                        title="Remove product"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="form-grid">
+                    {/* Product Type — with manual option */}
+                    <Field label="Product Type" required error={errors[`product_${index}_product_type`]}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <select
+                          className={`form-control${errors[`product_${index}_product_type`] ? ' error' : ''}`}
+                          value={skus.includes(product.product_type) ? product.product_type : 'custom_other'}
+                          onChange={(e) => {
+                            if (e.target.value === 'custom_other') {
+                              setProduct(index, 'product_type')('');
+                            } else {
+                              setProduct(index, 'product_type')(e);
+                            }
+                            clearError(`product_${index}_product_type`);
+                          }}
+                          disabled={skuLoading}
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">{skuLoading ? 'Loading…' : 'Select product type…'}</option>
+                          {skus.map((s) => <option key={s} value={s}>{s}</option>)}
+                          <option value="custom_other">-- Type Custom --</option>
+                        </select>
+                        <input
+                          className={`form-control${errors[`product_${index}_product_type`] ? ' error' : ''}`}
+                          placeholder="Type custom product type..."
+                          value={product.product_type}
+                          onChange={(e) => { setProduct(index, 'product_type')(e); clearError(`product_${index}_product_type`); }}
+                          style={{ flex: 1, display: !skus.includes(product.product_type) ? 'block' : 'none' }}
+                        />
+                      </div>
+                    </Field>
+
+                    {/* Material — with manual option */}
+                    <Field label="Material" required error={errors[`product_${index}_material`]}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <select
+                          className={`form-control${errors[`product_${index}_material`] ? ' error' : ''}`}
+                          value={materials.includes(product.material) ? product.material : 'custom_other'}
+                          onChange={(e) => {
+                            if (e.target.value === 'custom_other') {
+                              setProduct(index, 'material')('');
+                            } else {
+                              setProduct(index, 'material')(e);
+                            }
+                            clearError(`product_${index}_material`);
+                          }}
+                          disabled={matLoading}
+                          style={{ flex: 1 }}
+                        >
+                          <option value="">{matLoading ? 'Loading…' : 'Select material…'}</option>
+                          {materials.map((m) => <option key={m} value={m}>{m}</option>)}
+                          <option value="custom_other">-- Type Custom --</option>
+                        </select>
+                        <input
+                          className={`form-control${errors[`product_${index}_material`] ? ' error' : ''}`}
+                          placeholder="Type custom material..."
+                          value={product.material}
+                          onChange={(e) => { setProduct(index, 'material')(e); clearError(`product_${index}_material`); }}
+                          style={{ flex: 1, display: !materials.includes(product.material) ? 'block' : 'none' }}
+                        />
+                      </div>
+                    </Field>
+
+                    {/* Quantity + Unit */}
+                    <Field label="Quantity" required error={errors[`product_${index}_quantity`]}>
+                      <div className="input-group">
+                        <input
+                          className={`form-control${errors[`product_${index}_quantity`] ? ' error' : ''}`}
+                          placeholder="0"
+                          value={product.quantity}
+                          onChange={(e) => { setProduct(index, 'quantity')(e); clearError(`product_${index}_quantity`); }}
+                          type="number"
+                          min="0"
+                          step="any"
+                        />
+                        <select
+                          style={{
+                            border: '1.5px solid var(--neutral-200)',
+                            borderLeft: 'none',
+                            borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
+                            padding: '0 12px',
+                            background: 'var(--neutral-100)',
+                            fontSize: 13,
+                            color: 'var(--neutral-600)',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            outline: 'none',
+                            minWidth: 80,
+                          }}
+                          value={product.unit}
+                          onChange={setProduct(index, 'unit')}
+                        >
+                          {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                      </div>
+                    </Field>
+
+                    {/* Sale Cost */}
+                    <Field label="Sale Cost (₹)" required error={errors[`product_${index}_sale_cost`]}>
+                      <div className="input-group">
+                        <span
+                          style={{
+                            display: 'flex', alignItems: 'center',
+                            padding: '0 12px',
+                            background: 'var(--neutral-100)',
+                            border: '1.5px solid var(--neutral-200)',
+                            borderRight: 'none',
+                            borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
+                            fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
+                          }}
+                        >₹</span>
+                        <input
+                          className={`form-control${errors[`product_${index}_sale_cost`] ? ' error' : ''}`}
+                          style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none' }}
+                          placeholder="0.00"
+                          value={product.sale_cost}
+                          onChange={(e) => { setProduct(index, 'sale_cost')(e); clearError(`product_${index}_sale_cost`); }}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                    </Field>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add Product Button */}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={addProduct}
+                style={{ width: '100%', marginTop: 8 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: 6 }}>
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Add Another Product
+              </button>
+
+              {/* Total Cost Display */}
+              <div style={{
+                marginTop: 20,
+                padding: '16px 20px',
+                background: 'var(--brand-teal-light)',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid rgba(0,185,142,.25)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--brand-teal-dark)' }}>
+                  Total Cost
+                </span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand-teal)' }}>
+                  ₹{totalCost.toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Section 3: Order Settings ── */}
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-header">
+              <span className="card-title">
+                <span style={{ color: 'var(--brand-teal)', marginRight: 8 }}>③</span>
+                Order Settings
               </span>
             </div>
             <div className="card-body">
               <div className="form-grid">
-
-                {/* Product Type — from top_sku view (skus column) */}
-                <Field label="Product Type" required error={errors.product_type}>
-                  <select
-                    className={`form-control${errors.product_type ? ' error' : ''}`}
-                    value={form.product_type}
-                    onChange={(e) => { set('product_type')(e); clearError('product_type'); }}
-                    disabled={skuLoading}
-                  >
-                    <option value="">{skuLoading ? 'Loading…' : 'Select product type…'}</option>
-                    {skus.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </Field>
-
-                {/* Material — from material_spilt view (material_type column) */}
-                <Field label="Material" required error={errors.material}>
-                  <select
-                    className={`form-control${errors.material ? ' error' : ''}`}
-                    value={form.material}
-                    onChange={(e) => { set('material')(e); clearError('material'); }}
-                    disabled={matLoading}
-                  >
-                    <option value="">{matLoading ? 'Loading…' : 'Select material…'}</option>
-                    {materials.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </Field>
-
-                {/* Quantity + Unit */}
-                <Field label="Quantity" required error={errors.quantity}>
-                  <div className="input-group">
-                    <input
-                      className={`form-control${errors.quantity ? ' error' : ''}`}
-                      placeholder="0"
-                      value={form.quantity}
-                      onChange={(e) => { set('quantity')(e); clearError('quantity'); }}
-                      type="number"
-                      min="0"
-                      step="any"
-                    />
-                    <select
-                      style={{
-                        border: '1.5px solid var(--neutral-200)',
-                        borderLeft: 'none',
-                        borderRadius: '0 var(--radius-sm) var(--radius-sm) 0',
-                        padding: '0 12px',
-                        background: 'var(--neutral-100)',
-                        fontSize: 13,
-                        color: 'var(--neutral-600)',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        minWidth: 80,
-                      }}
-                      value={form.unit}
-                      onChange={set('unit')}
-                    >
-                      {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-                </Field>
-
-                {/* Sale Cost */}
-                <Field label="Sale Cost (₹)" required error={errors.sale_cost}>
-                  <div className="input-group">
-                    <span
-                      style={{
-                        display: 'flex', alignItems: 'center',
-                        padding: '0 12px',
-                        background: 'var(--neutral-100)',
-                        border: '1.5px solid var(--neutral-200)',
-                        borderRight: 'none',
-                        borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
-                        fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
-                      }}
-                    >₹</span>
-                    <input
-                      className={`form-control${errors.sale_cost ? ' error' : ''}`}
-                      style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none' }}
-                      placeholder="0.00"
-                      value={form.sale_cost}
-                      onChange={(e) => { set('sale_cost')(e); clearError('sale_cost'); }}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                    />
-                  </div>
-                </Field>
-
                 {/* Payment Status */}
                 <Field label="Payment Status" required>
                   <select

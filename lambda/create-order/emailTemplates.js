@@ -2,6 +2,7 @@
  * Stellar Global Supplies OMS v2.0
  * Premium HTML email templates — inline CSS for max email-client compatibility
  * Revamped: gradient header, icon badges, clean data rows, strong CTAs
+ * Multi-product support added
  */
 
 const B = {
@@ -141,6 +142,33 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:al
 </html>`;
 }
 
+/* ── Products table for multi-product support ───────────────────────────────── */
+function productsTable(products) {
+  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  
+  return `
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
+    style="border:1.5px solid ${B.border};border-radius:12px;overflow:hidden;border-collapse:collapse;">
+    <tr style="background:${B.teal};">
+      <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Product Type</th>
+      <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Material</th>
+      <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:center;">Qty</th>
+      <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">Cost</th>
+    </tr>
+    ${products.map((p, i) => `
+    <tr style="background:${i % 2 === 0 ? B.white : B.grey};">
+      <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.product_type}</td>
+      <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.material}</td>
+      <td style="padding:11px 10px;font-size:13px;color:${B.muted};font-weight:500;text-align:center;border-bottom:1px solid ${B.border};">${p.quantity} ${p.unit}</td>
+      <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:700;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(p.sale_cost)}</td>
+    </tr>`).join('')}
+    <tr style="background:${B.tealLight};">
+      <td colspan="3" style="padding:12px 10px;font-size:14px;color:${B.navy};font-weight:700;text-align:right;">Total</td>
+      <td style="padding:12px 10px;font-size:16px;color:${B.tealDark};font-weight:800;text-align:right;">${formatCurrency(total)}</td>
+    </tr>
+  </table>`;
+}
+
 /* ── Order detail rows ────────────────────────────────────────────────────── */
 function detailRows(order) {
   const rows = [
@@ -194,13 +222,23 @@ function section(icon, title, children) {
 
 /* ════════════════════════════════════════════════════════════════════════════
    1. ORDER CONFIRMATION
-════════════════════════════════════════════════════════════════════════════ */
-function buildOrderConfirmationEmail(order) {
+═══════════════════════════════════════════════════════════════════════════ */
+function buildOrderConfirmationEmail(order, products = null) {
   const orderId     = order.id.slice(0, 8).toUpperCase();
   const trackingUrl = order.tracking_token
     ? `https://orders.stellarglobalsupplies.com/track/${order.tracking_token}`
     : null;
   const subject = `✅ Order Confirmed #${orderId} — Stellar Global Supplies`;
+
+  // Use products array if provided, otherwise fall back to single product
+  const hasMultipleProducts = products && products.length > 1;
+  const productsList = products || [{
+    product_type: order.product_type,
+    material:     order.material,
+    quantity:     order.quantity,
+    unit:         order.unit,
+    sale_cost:    order.sale_cost,
+  }];
 
   const body = `
     <!-- Hero -->
@@ -221,8 +259,8 @@ function buildOrderConfirmationEmail(order) {
       </tr>
     </table>
 
-    <!-- Order details -->
-    ${section('📦', 'Order Summary', detailRows(order))}
+    <!-- Products table -->
+    ${section('📦', hasMultipleProducts ? 'Products' : 'Order Summary', productsTable(productsList))}
 
     <!-- Status -->
     ${section('📍', 'Current Status', `
@@ -275,14 +313,30 @@ function buildOrderConfirmationEmail(order) {
     body,
   );
 
-  const text = `Stellar Global Supplies — Order Confirmed\n\nHi ${order.customer_name},\n\nOrder #${orderId} confirmed!\n\nProduct: ${order.product_type}\nMaterial: ${order.material}\nQuantity: ${order.quantity} ${order.unit}\nSale Cost: ${formatCurrency(order.sale_cost)}\nDelivery: ${formatDate(order.delivery_timeline)}\n${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}\n\nContact: +91 96376 55556`.trim();
+  // Build text version with all products
+  const productsText = productsList.map((p, i) => 
+    `Product ${i + 1}: ${p.product_type} - ${p.material} (${p.quantity} ${p.unit}) - ${formatCurrency(p.sale_cost)}`
+  ).join('\n');
+
+  const text = `Stellar Global Supplies — Order Confirmed
+
+Hi ${order.customer_name},
+
+Order #${orderId} confirmed!
+
+${productsText}
+Total: ${formatCurrency(productsList.reduce((sum, p) => sum + Number(p.sale_cost), 0))}
+Delivery: ${formatDate(order.delivery_timeline)}
+${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}
+
+Contact: +91 96376 55556`.trim();
 
   return { subject, html, text };
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
    2. STATUS UPDATE
-════════════════════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════════════════════ */
 function buildStatusUpdateEmail(order) {
   const orderId     = order.id.slice(0, 8).toUpperCase();
   const s           = STATUS[order.status] || STATUS['Order Received'];
@@ -398,14 +452,27 @@ function buildStatusUpdateEmail(order) {
     body,
   );
 
-  const text = `Stellar Global Supplies — Order Update\n\nHi ${order.customer_name},\n\nYour order #${orderId} is now: ${order.status}\n\n${msg}\n\nProduct: ${order.product_type}\nQuantity: ${order.quantity} ${order.unit}\nDelivery: ${formatDate(order.delivery_timeline)}\n${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}\n\nContact: +91 96376 55556`.trim();
+  const text = `Stellar Global Supplies — Order Update
+
+Hi ${order.customer_name},
+
+Your order #${orderId} is now: ${order.status}
+
+${msg}
+
+Product: ${order.product_type}
+Quantity: ${order.quantity} ${order.unit}
+Delivery: ${formatDate(order.delivery_timeline)}
+${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}
+
+Contact: +91 96376 55556`.trim();
 
   return { subject, html, text };
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
    3. DELAY NOTIFICATION
-════════════════════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════════════════════ */
 function buildDelayNotificationEmail(order) {
   const orderId     = order.id.slice(0, 8).toUpperCase();
   const trackingUrl = order.tracking_token
@@ -473,7 +540,19 @@ function buildDelayNotificationEmail(order) {
     body,
   );
 
-  const text = `Stellar Global Supplies — Delivery Update\n\nHi ${order.customer_name},\n\nWe're sorry — your order #${orderId} delivery has been rescheduled.\n\nNew Delivery Date: ${formatDate(order.delivery_timeline)}\n\nProduct: ${order.product_type}\nQuantity: ${order.quantity} ${order.unit}\n${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}\n\nContact: +91 96376 55556`.trim();
+  const text = `Stellar Global Supplies — Delivery Update
+
+Hi ${order.customer_name},
+
+We're sorry — your order #${orderId} delivery has been rescheduled.
+
+New Delivery Date: ${formatDate(order.delivery_timeline)}
+
+Product: ${order.product_type}
+Quantity: ${order.quantity} ${order.unit}
+${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}
+
+Contact: +91 96376 55556`.trim();
 
   return { subject, html, text };
 }

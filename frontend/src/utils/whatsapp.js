@@ -16,7 +16,7 @@ function fmt(n) {
   return Number(n).toLocaleString('en-IN');
 }
 
-export function buildWhatsAppMessage(order) {
+export function buildWhatsAppMessage(order, orderItems = null) {
   const orderId     = order.id.slice(0, 8).toUpperCase();
   const trackingUrl = order.tracking_token ? `${TRACK_BASE}/${order.tracking_token}` : null;
   const delivDate   = order.delivery_timeline
@@ -24,25 +24,49 @@ export function buildWhatsAppMessage(order) {
     : 'TBD';
   const invoiceOk = isInvoiceValid(order);
 
+  // Use order items if provided, otherwise fall back to single product
+  const products = orderItems && orderItems.length > 0 ? orderItems : [{
+    product_type: order.product_type,
+    material:     order.material,
+    quantity:     order.quantity,
+    unit:         order.unit,
+    sale_cost:    order.sale_cost,
+  }];
+
+  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+
   const lines = [
     `*Stellar Global Supplies*`,
-    `Order Update \u{1F4E6}`,
+    `Order Update 📦`,
     ``,
     `Hello *${order.customer_name}*,`,
     ``,
     `Here's your order summary:`,
     ``,
-    `\u{1F516} *#${orderId}*`,
-    `\u{1F4E6} ${order.product_type} -- ${order.material}`,
-    `\u{1F4D0} ${order.quantity} ${order.unit}`,
-    `\u{1F4B0} \u20B9${fmt(order.sale_cost)} - ${order.payment_status}`,
-    `\u{1F69A} ${delivDate}`,
-    `\u{2705} *${order.status}*`,
+    `🔖 *#${orderId}*`,
   ];
+
+  // Add all products
+  products.forEach((p, i) => {
+    lines.push(`📦 ${p.product_type} - ${p.material}`);
+    lines.push(`📐 ${p.quantity} ${p.unit}`);
+    lines.push(`💰 ₹${fmt(p.sale_cost)}`);
+    if (i < products.length - 1) lines.push(``);
+  });
+
+  // Add total if multiple products
+  if (products.length > 1) {
+    lines.push(``);
+    lines.push(`💵 *Total: ₹${fmt(total)}*`);
+  }
+
+  lines.push(`💰 *${order.payment_status}*`);
+  lines.push(`🚚 ${delivDate}`);
+  lines.push(`✅ *${order.status}*`);
 
   if (trackingUrl) {
     lines.push(``);
-    lines.push(`\u{1F517} *Track your order:*`);
+    lines.push(`🔗 *Track your order:*`);
     lines.push(trackingUrl);
   }
 
@@ -51,55 +75,79 @@ export function buildWhatsAppMessage(order) {
   if (order.invoice_url) {
     lines.push(``);
     if (invoiceOk && trackingUrl) {
-      lines.push(`\u{1F4C4} *Invoice:* Download from your tracking page above`);
+      lines.push(`📄 *Invoice:* Download from your tracking page above`);
     } else if (invoiceOk && !trackingUrl) {
-      lines.push(`\u{1F4C4} *Invoice:* Check your email for the download link`);
+      lines.push(`📄 *Invoice:* Check your email for the download link`);
     } else {
-      lines.push(`\u{1F4C4} *Invoice:* Link expired -- reply here to request a new copy`);
+      lines.push(`📄 *Invoice:* Link expired -- reply here to request a new copy`);
     }
   }
 
   if (order.payment_status !== 'Paid') {
     lines.push(``);
-    lines.push(`\u26A0\u26A0 *Payment Reminder*`);
+    lines.push(`⚠️⚠️ *Payment Reminder*`);
     lines.push(`Your payment status: *${order.payment_status}*`);
     lines.push(`We'd appreciate it if you could complete your payment at the earliest. We're here to help if you have any questions!`);
   }
 
   lines.push(``);
-  lines.push(`\u{1F4DE} +91 96376 55556`);
-  lines.push(`\u{1F310} stellarglobalsupplies.com`);
+  lines.push(`📞 +91 96376 55556`);
+  lines.push(`🌐 stellarglobalsupplies.com`);
 
   const phone = order.phone.replace(/\D/g, '');
   const wa    = phone.startsWith('91') ? phone : `91${phone}`;
   return `https://wa.me/${wa}?text=${encodeURIComponent(lines.join('\n'))}`;
 }
 
-export function buildBusinessWhatsAppMessage(order) {
+export function buildBusinessWhatsAppMessage(order, orderItems = null) {
   const orderId     = order.id.slice(0, 8).toUpperCase();
   const trackingUrl = order.tracking_token ? `${TRACK_BASE}/${order.tracking_token}` : null;
   const delivDate   = order.delivery_timeline
     ? format(new Date(order.delivery_timeline), 'dd MMM yyyy')
     : 'TBD';
 
+  // Use order items if provided, otherwise fall back to single product
+  const products = orderItems && orderItems.length > 0 ? orderItems : [{
+    product_type: order.product_type,
+    material:     order.material,
+    quantity:     order.quantity,
+    unit:         order.unit,
+    sale_cost:    order.sale_cost,
+  }];
+
+  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+
   const lines = [
     `*New Order -- Stellar OMS*`,
     ``,
-    `\u{1F516} *#${orderId}*`,
-    `\u{1F464} ${order.customer_name}`,
-    `\u{1F4F1} ${order.phone}`,
-    `\u{1F4E7} ${order.email}`,
+    `🔖 *#${orderId}*`,
+    `👤 ${order.customer_name}`,
+    `📱 ${order.phone}`,
+    `📧 ${order.email}`,
     ``,
-    `\u{1F4E6} ${order.product_type} - ${order.material}`,
-    `\u{1F4D0} ${order.quantity} ${order.unit}`,
-    `\u{1F4B0} \u20B9${fmt(order.sale_cost)} - ${order.payment_status}`,
-    `\u{1F69A} ${delivDate}`,
-    `\u{1F4CD} ${order.status}`,
   ];
+
+  // Add all products
+  products.forEach((p, i) => {
+    lines.push(`📦 ${p.product_type} - ${p.material}`);
+    lines.push(`📐 ${p.quantity} ${p.unit}`);
+    lines.push(`💰 ₹${fmt(p.sale_cost)}`);
+    if (i < products.length - 1) lines.push(``);
+  });
+
+  // Add total if multiple products
+  if (products.length > 1) {
+    lines.push(``);
+    lines.push(`💵 *Total: ₹${fmt(total)}*`);
+  }
+
+  lines.push(`💰 ${order.payment_status}`);
+  lines.push(`🚚 ${delivDate}`);
+  lines.push(`📍 ${order.status}`);
 
   if (trackingUrl) {
     lines.push(``);
-    lines.push(`\u{1F517} ${trackingUrl}`);
+    lines.push(`🔗 ${trackingUrl}`);
   }
 
   return `https://wa.me/${BUSINESS_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;

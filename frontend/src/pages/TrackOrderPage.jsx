@@ -116,6 +116,49 @@ function Row({ label, value, highlight }) {
   );
 }
 
+/* ── Products Table for Track Page ─────────────────────────────────────────── */
+function ProductsTable({ products }) {
+  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F1F5F9' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+        Products ({products.length})
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: '#E6F7F3' }}>
+            <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Product</th>
+            <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Material</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Qty</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9' }}>{p.product_type}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9' }}>{p.material}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
+                {p.quantity} {p.unit}
+              </td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600 }}>
+                ₹{Number(p.sale_cost).toLocaleString('en-IN')}
+              </td>
+            </tr>
+          ))}
+          <tr style={{ background: '#E6F7F3' }}>
+            <td colSpan={3} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
+            <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
+              ₹{total.toLocaleString('en-IN')}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function TrackOrderPage() {
   const { token } = useParams();
   const [order,   setOrder]   = useState(null);
@@ -125,7 +168,8 @@ export default function TrackOrderPage() {
   useEffect(() => {
     (async () => {
       try {
-        setOrder(await fetchOrderByTrackingToken(token));
+        const data = await fetchOrderByTrackingToken(token);
+        setOrder(data);
       } catch (e) {
         setError(e.message || 'Order not found');
       } finally {
@@ -161,6 +205,15 @@ export default function TrackOrderPage() {
   const invoiceOk  = isInvoiceValid(order);
   const delivDate  = order.delivery_timeline ? format(new Date(order.delivery_timeline), 'dd MMM yyyy') : '—';
   const isDelivered = order.status === 'Delivered';
+
+  // Use order items from API response if available, otherwise fall back to single product
+  const products = (order.order_items && order.order_items.length > 0) ? order.order_items : [{
+    product_type: order.product_type,
+    material:     order.material,
+    quantity:     order.quantity,
+    unit:         order.unit,
+    sale_cost:    order.sale_cost,
+  }];
 
   return (
     <div style={{ minHeight: '100vh', background: '#F4F7FB', fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -304,12 +357,12 @@ export default function TrackOrderPage() {
              <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 14, color: '#1A202C' }}>Order Details</span>
            </div>
            <div style={{ padding: '4px 20px 12px' }}>
-             <Row label="Product Type"  value={order.product_type} />
-             <Row label="Material"      value={order.material} />
-             <Row label="Quantity"      value={`${order.quantity} ${order.unit}`} />
              <Row label="Payment"       value={order.payment_status}
                highlight={order.payment_status === 'Paid' ? '#065F46' : '#B45309'} />
              <Row label="Order Placed"  value={format(new Date(order.created_at), 'dd MMM yyyy')} />
+             
+             {/* Products table */}
+             <ProductsTable products={products} />
            </div>
          </div>
 

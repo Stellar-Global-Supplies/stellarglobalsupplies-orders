@@ -140,6 +140,17 @@ export async function fetchOrderById(id) {
   return data;
 }
 
+// Fetch order items for an order
+export async function fetchOrderItems(orderId) {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('*')
+    .eq('order_id', orderId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
 /**
  * Check if invoice is still within the 7-day download window.
  * Works even if invoice_uploaded_at is null (treats as expired).

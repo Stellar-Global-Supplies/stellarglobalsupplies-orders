@@ -1,6 +1,7 @@
 /**
  * Lambda: POST /orders
  * Creates order in Supabase with status = "Order Received"
+ * Creates order items for multi-product support
  * Sends confirmation email via Gmail API (OAuth2)
  */
 
@@ -120,50 +121,90 @@ exports.handler = async (event) => {
   catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
   const {
-    customer_name, phone, email, product_type,
-    material, quantity, unit, sale_cost,
+    customer_name, phone, email,
     payment_status, delivery_timeline,
+    products,
   } = body;
 
-  const missing = Object.entries({ customer_name, phone, email, product_type, material, quantity, sale_cost })
+  // Validate required fields
+  const missing = Object.entries({ customer_name, phone, email })
     .filter(([, v]) => v === undefined || v === null || v === '')
     .map(([k]) => k);
   if (missing.length)
     return respond(400, { message: `Missing required fields: ${missing.join(', ')}` });
 
-   // Generate tracking token (compatible with older Node.js versions)
-   const crypto = require('crypto');
-   const trackingToken = crypto.randomBytes(16).toString('hex');
+  // Validate products array
+  if (!products || !Array.isArray(products) || products.length === 0)
+    return respond(400, { message: 'At least one product is required' });
 
-   // Insert order
-   const { data: order, error: insertErr } = await supabase
-     .from('orders')
-     .insert({
-       customer_name:     customer_name.trim(),
-       phone:             phone.trim(),
-       email:             email.trim().toLowerCase(),
-       product_type,
-       material,
-       quantity:          Number(quantity),
-       unit:              unit || 'Pieces',
-       sale_cost:         Number(sale_cost),
-       payment_status:    payment_status || 'Pending',
-       delivery_timeline: delivery_timeline || null,
-       status:            'Order Received',
-       created_by:        user.id,
-       tracking_token:    trackingToken,
-     })
-     .select()
-     .single();
+  // Validate each product
+  for (let i = 0; i < products.length; i++) {
+    const p = products[i];
+    const pMissing = Object.entries({ product_type: p.product_type, material: p.material, quantity: p.quantity, sale_cost: p.sale_cost })
+      .filter(([, v]) => v === undefined || v === null || v === '')
+      .map(([k]) => k);
+    if (pMissing.length)
+      return respond(400, { message: `Product ${i + 1}: Missing fields: ${pMissing.join(', ')}` });
+  }
+
+  // Generate tracking token (compatible with older Node.js versions)
+  const crypto = require('crypto');
+  const trackingToken = crypto.randomBytes(16).toString('hex');
+
+  // Calculate total cost from all products
+  const totalCost = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+
+  // Use first product for backward compatibility with orders table
+  const firstProduct = products[0];
+
+  // Insert order
+  const { data: order, error: insertErr } = await supabase
+    .from('orders')
+    .insert({
+      customer_name:     customer_name.trim(),
+      phone:             phone.trim(),
+      email:             email.trim().toLowerCase(),
+      product_type:      firstProduct.product_type,
+      material:          firstProduct.material,
+      quantity:          Number(firstProduct.quantity),
+      unit:              firstProduct.unit || 'Pieces',
+      sale_cost:         totalCost, // Store total in main order
+      payment_status:    payment_status || 'Pending',
+      delivery_timeline: delivery_timeline || null,
+      status:            'Order Received',
+      created_by:        user.id,
+      tracking_token:    trackingToken,
+    })
+    .select()
+    .single();
 
   if (insertErr) {
     console.error('Insert error:', insertErr);
     return respond(500, { message: 'Failed to create order', detail: insertErr.message });
   }
 
+  // Insert order items
+  const orderItems = products.map(p => ({
+    order_id:     order.id,
+    product_type: p.product_type,
+    material:     p.material,
+    quantity:     Number(p.quantity),
+    unit:         p.unit || 'Pieces',
+    sale_cost:    Number(p.sale_cost),
+  }));
+
+  const { error: itemsErr } = await supabase
+    .from('order_items')
+    .insert(orderItems);
+
+  if (itemsErr) {
+    console.error('Order items insert error:', itemsErr);
+    // Don't fail the whole request, but log the error
+  }
+
   // Send confirmation email — non-blocking
   try {
-    const { subject, html, text } = buildOrderConfirmationEmail(order);
+    const { subject, html, text } = buildOrderConfirmationEmail(order, products);
     await sendEmail({ to: order.email, subject, html, text });
   } catch (e) {
     console.error('Confirmation email error (non-fatal):', e.message);

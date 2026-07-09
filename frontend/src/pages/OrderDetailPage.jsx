@@ -6,6 +6,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import toast from 'react-hot-toast';
 import {
   fetchOrderById,
+  fetchOrderItems,
   updateOrderStatus,
   sendEmailNotification,
   delayOrder,
@@ -44,11 +45,55 @@ function DetailRow({ label, value }) {
   );
 }
 
+// Products table component
+function ProductsTable({ products }) {
+  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+        Products ({products.length})
+      </div>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: 'var(--brand-teal-light)', color: 'var(--brand-teal-dark)' }}>
+            <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Product</th>
+            <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Material</th>
+            <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Qty</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {products.map((p, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? 'var(--neutral-50)' : '#fff' }}>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)' }}>{p.product_type}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)' }}>{p.material}</td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--neutral-500)' }}>
+                {p.quantity} {p.unit}
+              </td>
+              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', fontWeight: 600 }}>
+                ₹{Number(p.sale_cost).toLocaleString('en-IN')}
+              </td>
+            </tr>
+          ))}
+          <tr style={{ background: 'var(--brand-teal-light)' }}>
+            <td colSpan={3} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right' }}>Total</td>
+            <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: 'var(--brand-teal)' }}>
+              ₹{total.toLocaleString('en-IN')}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function OrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [order,          setOrder]          = useState(null);
+  const [orderItems,     setOrderItems]     = useState([]);
   const [loading,        setLoading]        = useState(true);
   const [updatingStatus, setUpdating]       = useState(false);
   const [sendingEmail,   setSendingEmail]   = useState(false);
@@ -64,6 +109,9 @@ export default function OrderDetailPage() {
     try {
       const data = await fetchOrderById(id);
       setOrder(data);
+      // Fetch order items
+      const items = await fetchOrderItems(id);
+      setOrderItems(items);
     } catch (err) {
       toast.error('Order not found');
       navigate('/orders');
@@ -103,7 +151,7 @@ export default function OrderDetailPage() {
   };
 
   const handleWhatsApp = () => {
-    const url = buildWhatsAppMessage(order);
+    const url = buildWhatsAppMessage(order, orderItems);
     window.open(url, '_blank');
   };
 
@@ -419,10 +467,6 @@ export default function OrderDetailPage() {
           <div className="card">
             <div className="card-header"><span className="card-title">Order Details</span></div>
             <div className="card-body">
-              <DetailRow label="Product Type"      value={order.product_type} />
-              <DetailRow label="Material"          value={order.material} />
-              <DetailRow label="Quantity"          value={`${order.quantity} ${order.unit}`} />
-              <DetailRow label="Sale Cost"         value={`₹${Number(order.sale_cost).toLocaleString('en-IN')}`} />
               <DetailRow label="Payment"           value={<PaymentBadge status={order.payment_status} />} />
               <DetailRow
                 label="Delivery Timeline"
@@ -431,6 +475,9 @@ export default function OrderDetailPage() {
                   : '—'}
               />
               <DetailRow label="Current Status" value={<StatusBadge status={order.status} />} />
+
+              {/* Products table - show if there are multiple products */}
+              {orderItems.length > 0 && <ProductsTable products={orderItems} />}
 
               {/* ── Invoice Download ─────────────────────────────────────────
                   FIX: Use isInvoiceValid() for consistent expiry logic.
