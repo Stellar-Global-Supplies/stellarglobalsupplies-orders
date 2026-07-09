@@ -147,9 +147,13 @@ exports.handler = async (event) => {
       return respond(400, { message: `Product ${i + 1}: Missing fields: ${pMissing.join(', ')}` });
   }
 
-  // Generate tracking token (compatible with older Node.js versions)
-  const crypto = require('crypto');
-  const trackingToken = crypto.randomBytes(16).toString('hex');
+  // Generate tracking token (UUID format to match database schema)
+  const { randomUUID } = require('crypto');
+  const trackingToken = randomUUID ? randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 
   // Calculate total cost from all products
   const totalCost = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);

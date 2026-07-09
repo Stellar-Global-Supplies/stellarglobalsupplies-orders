@@ -55,9 +55,9 @@ exports.handler = async (event) => {
   const token = event.pathParameters?.token;
   if (!token) return respond(400, { message: 'Tracking token required' });
 
-  // Validate tracking token format (32-character hex string)
-  const tokenRegex = /^[0-9a-f]{32}$/i;
-  if (!tokenRegex.test(token)) {
+  // Validate tracking token format (UUID)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(token)) {
     return respond(400, { message: 'Invalid tracking token format' });
   }
 
