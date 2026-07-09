@@ -185,14 +185,14 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT PANEL ── */}
+       {/* ── RIGHT PANEL ── */}
       <div style={{
         flex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         background: '#F4F7FB',
-        padding: '40px 24px',
+        padding: '24px 16px',
       }}>
         <div style={{
           width: '100%',

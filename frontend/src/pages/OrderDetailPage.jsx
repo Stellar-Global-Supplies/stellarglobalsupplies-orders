@@ -234,6 +234,7 @@ export default function OrderDetailPage() {
                   <option value="Pending">Pending</option>
                   <option value="Partial">Partial</option>
                   <option value="Paid">Paid</option>
+                  <option value="After 30 days">After 30 days</option>
                 </select>
               </div>
             </div>
@@ -305,6 +306,7 @@ export default function OrderDetailPage() {
                   <option value="Pending">Pending</option>
                   <option value="Partial">Partial</option>
                   <option value="Paid">Paid</option>
+                  <option value="After 30 days">After 30 days</option>
                 </select>
               </div>
               <div className="form-group">

@@ -7,7 +7,7 @@ import { fetchProductTypes, fetchMaterials } from '../utils/supabase';
 import { createOrder } from '../utils/api';
 
 const UNITS           = ['Pieces', 'Kgs'];
-const PAYMENT_OPTIONS = ['Pending', 'Paid', 'Partial'];
+const PAYMENT_OPTIONS = ['Pending', 'Paid', 'Partial', 'After 30 days'];
 
 function Field({ label, required, children, error }) {
   return (
