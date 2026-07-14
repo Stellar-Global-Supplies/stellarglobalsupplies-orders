@@ -19,6 +19,7 @@ import {
 import { StatusBadge, PaymentBadge } from '../components/StatusBadge';
 import OrderTimeline, { STATUS_ORDER } from '../components/OrderTimeline';
 import { buildWhatsAppMessage } from '../utils/whatsapp';
+import { fetchProductTypes, fetchMaterials } from '../utils/supabase';
 
 const NEXT_STATUS = {
   'Order Received':    'Processing',
@@ -113,6 +114,10 @@ export default function OrderDetailPage() {
   const [editingProducts, setEditingProducts] = useState(false);
   const [editedProducts, setEditedProducts] = useState([]);
   const [savingProducts, setSavingProducts] = useState(false);
+  const [skus, setSkus] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [skuLoading, setSkuLoading] = useState(true);
+  const [matLoading, setMatLoading] = useState(true);
 
   const loadOrder = async () => {
     setLoading(true);
@@ -131,6 +136,23 @@ export default function OrderDetailPage() {
   };
 
   useEffect(() => { loadOrder(); }, [id]); // eslint-disable-line
+
+  // Fetch product types and materials when editing starts
+  useEffect(() => {
+    if (editingProducts) {
+      setSkuLoading(true);
+      setMatLoading(true);
+      fetchProductTypes()
+        .then(setSkus)
+        .catch(() => toast.error('Failed to load product types'))
+        .finally(() => setSkuLoading(false));
+
+      fetchMaterials()
+        .then(setMaterials)
+        .catch(() => toast.error('Failed to load materials'))
+        .finally(() => setMatLoading(false));
+    }
+  }, [editingProducts]);
 
   const handleStatusUpdate = async () => {
     const next = NEXT_STATUS[order.status];
@@ -642,18 +664,61 @@ export default function OrderDetailPage() {
                         )}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                        <input
-                          className="form-control"
-                          placeholder="Product Type *"
-                          value={product.product_type}
-                          onChange={(e) => updateEditedProduct(index, 'product_type', e.target.value)}
-                        />
-                        <input
-                          className="form-control"
-                          placeholder="Material *"
-                          value={product.material}
-                          onChange={(e) => updateEditedProduct(index, 'material', e.target.value)}
-                        />
+                        {/* Product Type — with manual option */}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <select
+                            className="form-control"
+                            value={skus.includes(product.product_type) ? product.product_type : 'custom_other'}
+                            onChange={(e) => {
+                              if (e.target.value === 'custom_other') {
+                                updateEditedProduct(index, 'product_type')('');
+                              } else {
+                                updateEditedProduct(index, 'product_type')(e.target.value);
+                              }
+                            }}
+                            disabled={skuLoading}
+                            style={{ flex: 1 }}
+                          >
+                            <option value="">{skuLoading ? 'Loading…' : 'Select product type…'}</option>
+                            {skus.map((s) => <option key={s} value={s}>{s}</option>)}
+                            <option value="custom_other">-- Type Custom --</option>
+                          </select>
+                          <input
+                            className="form-control"
+                            placeholder="Type custom product type..."
+                            value={product.product_type}
+                            onChange={(e) => updateEditedProduct(index, 'product_type')(e.target.value)}
+                            style={{ flex: 1, display: !skus.includes(product.product_type) ? 'block' : 'none' }}
+                          />
+                        </div>
+
+                        {/* Material — with manual option */}
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <select
+                            className="form-control"
+                            value={materials.includes(product.material) ? product.material : 'custom_other'}
+                            onChange={(e) => {
+                              if (e.target.value === 'custom_other') {
+                                updateEditedProduct(index, 'material')('');
+                              } else {
+                                updateEditedProduct(index, 'material')(e.target.value);
+                              }
+                            }}
+                            disabled={matLoading}
+                            style={{ flex: 1 }}
+                          >
+                            <option value="">{matLoading ? 'Loading…' : 'Select material…'}</option>
+                            {materials.map((m) => <option key={m} value={m}>{m}</option>)}
+                            <option value="custom_other">-- Type Custom --</option>
+                          </select>
+                          <input
+                            className="form-control"
+                            placeholder="Type custom material..."
+                            value={product.material}
+                            onChange={(e) => updateEditedProduct(index, 'material')(e.target.value)}
+                            style={{ flex: 1, display: !materials.includes(product.material) ? 'block' : 'none' }}
+                          />
+                        </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                         <input
