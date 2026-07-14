@@ -30,6 +30,8 @@ const EMPTY_PRODUCT = {
   unit:         'Pieces',
   unit_cost:    '',
   sale_cost:    '',
+  cgst:         '',
+  sgst:         '',
   description:  '',
 };
 
@@ -85,6 +87,13 @@ export default function NewOrderPage() {
         current.sale_cost = (unitCost * qty).toFixed(2);
       }
       
+      // Auto-calculate CGST and SGST (9% each) when sale_cost changes
+      if (key === 'sale_cost' || key === 'unit_cost' || key === 'quantity') {
+        const saleCost = parseFloat(current.sale_cost) || 0;
+        current.cgst = (saleCost * 0.09).toFixed(2);
+        current.sgst = (saleCost * 0.09).toFixed(2);
+      }
+      
       newProducts[index] = current;
       return newProducts;
     });
@@ -105,10 +114,12 @@ export default function NewOrderPage() {
   const clearError = (key) =>
     setErrors((prev) => { const n = { ...prev }; delete n[key]; return n; });
 
-  // Calculate total cost from all products
+  // Calculate total cost from all products (including taxes)
   const totalCost = products.reduce((sum, p) => {
-    const cost = parseFloat(p.sale_cost) || 0;
-    return sum + cost;
+    const saleCost = parseFloat(p.sale_cost) || 0;
+    const cgst = parseFloat(p.cgst) || 0;
+    const sgst = parseFloat(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
   }, 0);
 
   const validate = () => {
@@ -157,6 +168,8 @@ export default function NewOrderPage() {
           unit:         p.unit || 'Pieces',
           unit_cost:    Number(p.unit_cost) || 0,
           sale_cost:    Number(p.sale_cost),
+          cgst:         Number(p.cgst) || 0,
+          sgst:         Number(p.sgst) || 0,
           description:  p.description || '',
         })),
       };
@@ -413,6 +426,54 @@ export default function NewOrderPage() {
                           type="number"
                           min="0"
                           step="0.01"
+                        />
+                      </div>
+                    </Field>
+
+                    {/* CGST (9% - auto-calculated) */}
+                    <Field label="CGST (9%)">
+                      <div className="input-group">
+                        <span
+                          style={{
+                            display: 'flex', alignItems: 'center',
+                            padding: '0 12px',
+                            background: 'var(--neutral-100)',
+                            border: '1.5px solid var(--neutral-200)',
+                            borderRight: 'none',
+                            borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
+                            fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
+                          }}
+                        >₹</span>
+                        <input
+                          className="form-control"
+                          style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none', background: 'var(--neutral-50)' }}
+                          value={product.cgst ? parseFloat(product.cgst).toFixed(2) : '0.00'}
+                          readOnly
+                          type="number"
+                        />
+                      </div>
+                    </Field>
+
+                    {/* SGST (9% - auto-calculated) */}
+                    <Field label="SGST (9%)">
+                      <div className="input-group">
+                        <span
+                          style={{
+                            display: 'flex', alignItems: 'center',
+                            padding: '0 12px',
+                            background: 'var(--neutral-100)',
+                            border: '1.5px solid var(--neutral-200)',
+                            borderRight: 'none',
+                            borderRadius: 'var(--radius-sm) 0 0 var(--radius-sm)',
+                            fontSize: 13, color: 'var(--neutral-600)', fontWeight: 600,
+                          }}
+                        >₹</span>
+                        <input
+                          className="form-control"
+                          style={{ borderRadius: '0 var(--radius-sm) var(--radius-sm) 0', borderLeft: 'none', background: 'var(--neutral-50)' }}
+                          value={product.sgst ? parseFloat(product.sgst).toFixed(2) : '0.00'}
+                          readOnly
+                          type="number"
                         />
                       </div>
                     </Field>

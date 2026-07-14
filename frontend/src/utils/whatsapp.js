@@ -33,7 +33,13 @@ export function buildWhatsAppMessage(order, orderItems = null) {
     sale_cost:    order.sale_cost,
   }];
 
-  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  // Calculate total including taxes
+  const total = products.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
 
   const lines = [
     `*Stellar Global Supplies*`,
@@ -48,10 +54,19 @@ export function buildWhatsAppMessage(order, orderItems = null) {
 
   // Add all products
   products.forEach((p, i) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    const productTotal = saleCost + cgst + sgst;
+    
     lines.push(`📦 ${p.product_type} - ${p.material}`);
     lines.push(`📐 ${p.quantity} ${p.unit}`);
     if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
-    lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
+    if (cgst > 0 || sgst > 0) {
+      lines.push(`🧾 CGST (9%): ₹${fmt(cgst)}`);
+      lines.push(`🧾 SGST (9%): ₹${fmt(sgst)}`);
+    }
+    lines.push(`💰 Total: ₹${fmt(productTotal)}`);
     if (p.description && p.description.trim()) {
       lines.push(`📝 ${p.description.trim()}`);
     }
@@ -61,7 +76,7 @@ export function buildWhatsAppMessage(order, orderItems = null) {
   // Add total if multiple products
   if (products.length > 1) {
     lines.push(``);
-    lines.push(`💵 *Total: ₹${fmt(total)}*`);
+    lines.push(`💵 *Grand Total: ₹${fmt(total)}*`);
   }
 
   lines.push(`💰 *${order.payment_status}*`);
@@ -119,7 +134,13 @@ export function buildBusinessWhatsAppMessage(order, orderItems = null) {
     sale_cost:    order.sale_cost,
   }];
 
-  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  // Calculate total including taxes
+  const total = products.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
 
   const lines = [
     `*New Order -- Stellar OMS*`,
@@ -133,10 +154,19 @@ export function buildBusinessWhatsAppMessage(order, orderItems = null) {
 
   // Add all products
   products.forEach((p, i) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    const productTotal = saleCost + cgst + sgst;
+    
     lines.push(`📦 ${p.product_type} - ${p.material}`);
     lines.push(`📐 ${p.quantity} ${p.unit}`);
     if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
-    lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
+    if (cgst > 0 || sgst > 0) {
+      lines.push(`🧾 CGST (9%): ₹${fmt(cgst)}`);
+      lines.push(`🧾 SGST (9%): ₹${fmt(sgst)}`);
+    }
+    lines.push(`💰 Total: ₹${fmt(productTotal)}`);
     if (p.description && p.description.trim()) {
       lines.push(`📝 ${p.description.trim()}`);
     }
@@ -146,7 +176,7 @@ export function buildBusinessWhatsAppMessage(order, orderItems = null) {
   // Add total if multiple products
   if (products.length > 1) {
     lines.push(``);
-    lines.push(`💵 *Total: ₹${fmt(total)}*`);
+    lines.push(`💵 *Grand Total: ₹${fmt(total)}*`);
   }
 
   lines.push(`💰 ${order.payment_status}`);

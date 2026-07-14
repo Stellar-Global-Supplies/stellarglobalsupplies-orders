@@ -51,7 +51,12 @@ function DetailRow({ label, value }) {
 
 // Products table component
 function ProductsTable({ products }) {
-  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  const total = products.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
   
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
@@ -65,27 +70,42 @@ function ProductsTable({ products }) {
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12 }}>Material</th>
             <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12 }}>Qty</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Unit Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>CGST (9%)</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>SGST (9%)</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12 }}>Total</th>
           </tr>
         </thead>
         <tbody>
-          {products.map((p, i) => (
-            <tr key={i} style={{ background: i % 2 === 0 ? 'var(--neutral-50)' : '#fff' }}>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.product_type}</td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.material}</td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--neutral-500)' }}>
-                {p.quantity} {p.unit}
-              </td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--neutral-800)' }}>
-                ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
-              </td>
-              <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', fontWeight: 600 }}>
-                ₹{Number(p.sale_cost).toLocaleString('en-IN')}
-              </td>
-            </tr>
-          ))}
+          {products.map((p, i) => {
+            const saleCost = Number(p.sale_cost) || 0;
+            const cgst = Number(p.cgst) || 0;
+            const sgst = Number(p.sgst) || 0;
+            const productTotal = saleCost + cgst + sgst;
+            
+            return (
+              <tr key={i} style={{ background: i % 2 === 0 ? 'var(--neutral-50)' : '#fff' }}>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.product_type}</td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', color: 'var(--neutral-800)', fontWeight: 600 }}>{p.material}</td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--neutral-500)' }}>
+                  {p.quantity} {p.unit}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--neutral-800)' }}>
+                  ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--neutral-600)' }}>
+                  ₹{cgst.toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', color: 'var(--neutral-600)' }}>
+                  ₹{sgst.toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid var(--border-color)', textAlign: 'right', fontWeight: 600 }}>
+                  ₹{productTotal.toLocaleString('en-IN')}
+                </td>
+              </tr>
+            );
+          })}
           <tr style={{ background: 'var(--brand-teal-light)' }}>
-            <td colSpan={4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right' }}>Total</td>
+            <td colSpan={6} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right' }}>Grand Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: 'var(--brand-teal)' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>
@@ -243,6 +263,13 @@ export default function OrderDetailPage() {
         updated[index].sale_cost = (unitCost * qty).toFixed(2);
       }
       
+      // Auto-calculate CGST and SGST (9% each) when sale_cost changes
+      if (field === 'sale_cost' || field === 'unit_cost' || field === 'quantity') {
+        const saleCost = parseFloat(updated[index].sale_cost) || 0;
+        updated[index].cgst = (saleCost * 0.09).toFixed(2);
+        updated[index].sgst = (saleCost * 0.09).toFixed(2);
+      }
+      
       return updated;
     });
   };
@@ -255,6 +282,8 @@ export default function OrderDetailPage() {
       unit: 'Pieces',
       unit_cost: '',
       sale_cost: '',
+      cgst: '',
+      sgst: '',
       description: '',
     }]);
   };
@@ -300,6 +329,8 @@ export default function OrderDetailPage() {
             unit: product.unit,
             unit_cost: Number(product.unit_cost) || 0,
             sale_cost: Number(product.sale_cost),
+            cgst: Number(product.cgst) || 0,
+            sgst: Number(product.sgst) || 0,
             description: product.description || '',
           });
         } else {
@@ -311,6 +342,8 @@ export default function OrderDetailPage() {
             unit: product.unit,
             unit_cost: Number(product.unit_cost) || 0,
             sale_cost: Number(product.sale_cost),
+            cgst: Number(product.cgst) || 0,
+            sgst: Number(product.sgst) || 0,
             description: product.description || '',
           });
         }
@@ -746,7 +779,7 @@ export default function OrderDetailPage() {
                           onChange={(e) => updateEditedProduct(index, 'sale_cost', e.target.value)}
                         />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                         <input
                           className="form-control"
                           type="number"
@@ -754,6 +787,24 @@ export default function OrderDetailPage() {
                           value={product.unit_cost}
                           onChange={(e) => updateEditedProduct(index, 'unit_cost', e.target.value)}
                         />
+                        <input
+                          className="form-control"
+                          type="number"
+                          placeholder="CGST (₹)"
+                          value={product.cgst ? parseFloat(product.cgst).toFixed(2) : '0.00'}
+                          readOnly
+                          style={{ background: 'var(--neutral-50)' }}
+                        />
+                        <input
+                          className="form-control"
+                          type="number"
+                          placeholder="SGST (₹)"
+                          value={product.sgst ? parseFloat(product.sgst).toFixed(2) : '0.00'}
+                          readOnly
+                          style={{ background: 'var(--neutral-50)' }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '8px' }}>
                         <input
                           className="form-control"
                           placeholder="Description (optional)"

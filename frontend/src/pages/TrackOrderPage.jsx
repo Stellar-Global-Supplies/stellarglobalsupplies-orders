@@ -118,7 +118,12 @@ function Row({ label, value, highlight }) {
 
 /* ── Products Table for Track Page ─────────────────────────────────────────── */
 function ProductsTable({ products }) {
-  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  const total = products.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
   
   // Check if any product has a description
   const hasDescriptions = products.some(p => p.description && p.description.trim());
@@ -136,11 +141,19 @@ function ProductsTable({ products }) {
             {hasDescriptions && <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Description</th>}
             <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Qty</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Unit Cost</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>CGST (9%)</th>
+            <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>SGST (9%)</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Total</th>
           </tr>
         </thead>
         <tbody>
-           {products.map((p, i) => (
+           {products.map((p, i) => {
+             const saleCost = Number(p.sale_cost) || 0;
+             const cgst = Number(p.cgst) || 0;
+             const sgst = Number(p.sgst) || 0;
+             const productTotal = saleCost + cgst + sgst;
+             
+             return (
               <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
                 <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.product_type}</td>
                 <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.material}</td>
@@ -151,13 +164,20 @@ function ProductsTable({ products }) {
                 <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#1A202C' }}>
                   ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
                 </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#64748B' }}>
+                  ₹{cgst.toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#64748B' }}>
+                  ₹{sgst.toLocaleString('en-IN')}
+                </td>
                 <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600, color: '#1A202C' }}>
-                  ₹{Number(p.sale_cost).toLocaleString('en-IN')}
+                  ₹{productTotal.toLocaleString('en-IN')}
                 </td>
               </tr>
-           ))}
+             );
+           })}
           <tr style={{ background: '#E6F7F3' }}>
-            <td colSpan={hasDescriptions ? 5 : 4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
+            <td colSpan={hasDescriptions ? 7 : 6} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Grand Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>

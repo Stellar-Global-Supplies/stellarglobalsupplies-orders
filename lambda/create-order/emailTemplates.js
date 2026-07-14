@@ -144,10 +144,17 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:al
 
 /* ── Products table for multi-product support ───────────────────────────────── */
 function productsTable(products) {
-  const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  const grandTotal = products.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
   
   // Check if any product has a description
   const hasDescriptions = products.some(p => p.description && p.description.trim());
+  // Check if any product has taxes
+  const hasTaxes = products.some(p => Number(p.cgst) > 0 || Number(p.sgst) > 0);
   
   return `
   <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
@@ -158,20 +165,27 @@ function productsTable(products) {
       ${hasDescriptions ? `<th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Description</th>` : ''}
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:center;">Qty</th>
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">Unit Cost</th>
+      ${hasTaxes ? `<th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">CGST</th><th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">SGST</th>` : ''}
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">Total</th>
     </tr>
-    ${products.map((p, i) => `
+    ${products.map((p, i) => {
+      const saleCost = Number(p.sale_cost) || 0;
+      const cgst = Number(p.cgst) || 0;
+      const sgst = Number(p.sgst) || 0;
+      const productTotal = saleCost + cgst + sgst;
+      return `
     <tr style="background:${i % 2 === 0 ? B.white : B.grey};">
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.product_type}</td>
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.material}</td>
       ${hasDescriptions ? `<td style="padding:11px 10px;font-size:12px;color:${B.muted};font-weight:400;border-bottom:1px solid ${B.border};">${p.description || '-'}</td>` : ''}
       <td style="padding:11px 10px;font-size:13px;color:${B.muted};font-weight:500;text-align:center;border-bottom:1px solid ${B.border};">${p.quantity} ${p.unit}</td>
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(p.unit_cost || 0)}</td>
-      <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:700;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(p.sale_cost)}</td>
-    </tr>`).join('')}
+      ${hasTaxes ? `<td style="padding:11px 10px;font-size:12px;color:${B.muted};text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(cgst)}</td><td style="padding:11px 10px;font-size:12px;color:${B.muted};text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(sgst)}</td>` : ''}
+      <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:700;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(productTotal)}</td>
+    </tr>`}).join('')}
     <tr style="background:${B.tealLight};">
-      <td colspan="${hasDescriptions ? 5 : 4}" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">Total</td>
-      <td style="padding:12px 10px;font-size:16px;color:${B.tealDark};font-weight:800;text-align:right;">${formatCurrency(total)}</td>
+      <td colspan="${hasDescriptions ? (hasTaxes ? 6 : 4) : (hasTaxes ? 5 : 3)}" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">${hasTaxes ? 'Grand Total' : 'Total'}</td>
+      <td style="padding:12px 10px;font-size:16px;color:${B.tealDark};font-weight:800;text-align:right;">${formatCurrency(grandTotal)}</td>
     </tr>
   </table>`;
 }
@@ -472,9 +486,24 @@ function buildStatusUpdateEmail(order, products = null) {
   );
 
   // Build text version with all products
-  const productsText = productsList.map((p, i) => 
-    `Product ${i + 1}: ${p.product_type} - ${p.material} (${p.quantity} ${p.unit}) - ${formatCurrency(p.sale_cost)}`
-  ).join('\n');
+  const calcTotal = (list) => list.reduce((sum, p) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    return sum + saleCost + cgst + sgst;
+  }, 0);
+
+  const productsText = productsList.map((p, i) => {
+    const saleCost = Number(p.sale_cost) || 0;
+    const cgst = Number(p.cgst) || 0;
+    const sgst = Number(p.sgst) || 0;
+    const productTotal = saleCost + cgst + sgst;
+    let text = `Product ${i + 1}: ${p.product_type} - ${p.material} (${p.quantity} ${p.unit}) - ${formatCurrency(productTotal)}`;
+    if (cgst > 0 || sgst > 0) {
+      text += ` (CGST: ${formatCurrency(cgst)}, SGST: ${formatCurrency(sgst)})`;
+    }
+    return text;
+  }).join('\n');
 
   const text = `Stellar Global Supplies — Order Update
 
@@ -483,7 +512,7 @@ Hi ${order.customer_name},
 Your order #${orderId} is now: ${order.status}
 
 ${productsText}
-Total: ${formatCurrency(productsList.reduce((sum, p) => sum + Number(p.sale_cost), 0))}
+Total: ${formatCurrency(calcTotal(productsList))}
 Delivery: ${formatDate(order.delivery_timeline)}
 ${trackingUrl ? `\nTrack: ${trackingUrl}` : ''}
 
