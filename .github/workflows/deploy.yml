@@ -307,6 +307,21 @@ jobs:
           aws lambda wait function-updated \
             --function-name stellar-oms-get-order-by-token
 
+      # ── update-order-items ─────────────────────────────────────────────────────
+      - name: Package & deploy update-order-items
+        working-directory: lambda
+        run: |
+          cd update-order-items
+          cp -r ../node_modules ./node_modules
+          zip -qr ../update-order-items.zip .
+          rm -rf ./node_modules
+          aws lambda update-function-code \
+            --function-name stellar-oms-update-order-items \
+            --zip-file fileb://../update-order-items.zip \
+            --no-cli-pager
+          aws lambda wait function-updated \
+            --function-name stellar-oms-update-order-items
+
       - name: Store invoice bucket in SSM
         run: |
           INVOICE_BUCKET="${{ needs.terraform.outputs.invoice_bucket_name }}"
