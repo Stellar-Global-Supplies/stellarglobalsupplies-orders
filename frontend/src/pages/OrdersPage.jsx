@@ -147,7 +147,9 @@ export default function OrdersPage() {
                     <div style={{ fontSize: '12px', color: 'var(--neutral-400)' }}>{o.material}</div>
                   </td>
                   <td style={{ fontWeight: 500 }}>{o.quantity} {o.unit}</td>
-                  <td style={{ fontWeight: 600 }}>₹{Number(o.sale_cost).toLocaleString('en-IN')}</td>
+                  <td style={{ fontWeight: 600 }}>
+                    ₹{(Number(o.sale_cost) + Number(o.cgst_total || 0) + Number(o.sgst_total || 0)).toLocaleString('en-IN')}
+                  </td>
                   <td><PaymentBadge status={o.payment_status} /></td>
                   <td><StatusBadge status={o.status} /></td>
                   <td style={{ fontSize: '13px' }}>

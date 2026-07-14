@@ -100,7 +100,7 @@ export async function sendEmailNotification(orderId, type) {
 export async function fetchOrders({ search = '', status = '', page = 1, pageSize = 20 } = {}) {
   let query = supabase
     .from('orders')
-    .select('*, tracking_token, invoice_url, invoice_uploaded_at, invoice_s3_key', { count: 'exact' })
+    .select('*, tracking_token, invoice_url, invoice_uploaded_at, invoice_s3_key, cgst_total, sgst_total', { count: 'exact' })
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
