@@ -178,7 +178,9 @@ export default function DashboardPage() {
                       </td>
                       <td style={{ fontWeight: 600, fontSize: '13px' }}>{o.customer_name}</td>
                       <td style={{ fontSize: '13px', color: 'var(--neutral-600)' }}>{o.product_type}</td>
-                      <td style={{ fontWeight: 600 }}>₹{Number(o.sale_cost).toLocaleString('en-IN')}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        ₹{(Number(o.sale_cost) + Number(o.cgst_total || 0) + Number(o.sgst_total || 0)).toLocaleString('en-IN')}
+                      </td>
                       <td><StatusBadge status={o.status} /></td>
                       <td style={{ fontSize: '12px', color: 'var(--neutral-400)' }}>
                         {format(new Date(o.created_at), 'dd MMM')}
