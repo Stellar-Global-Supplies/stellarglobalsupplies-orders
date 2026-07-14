@@ -30,6 +30,7 @@ const EMPTY_PRODUCT = {
   unit:         'Pieces',
   unit_cost:    '',
   sale_cost:    '',
+  description:  '',
 };
 
 // Empty form state
@@ -156,6 +157,7 @@ export default function NewOrderPage() {
           unit:         p.unit || 'Pieces',
           unit_cost:    Number(p.unit_cost) || 0,
           sale_cost:    Number(p.sale_cost),
+          description:  p.description || '',
         })),
       };
       const result = await createOrder(payload);
@@ -413,6 +415,16 @@ export default function NewOrderPage() {
                           step="0.01"
                         />
                       </div>
+                    </Field>
+
+                    {/* Description (optional) */}
+                    <Field label="Description (Optional)">
+                      <input
+                        className="form-control"
+                        placeholder="Add notes or specifications (optional)"
+                        value={product.description}
+                        onChange={(e) => setProduct(index, 'description')(e)}
+                      />
                     </Field>
                   </div>
                 </div>

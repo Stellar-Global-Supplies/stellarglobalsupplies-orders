@@ -120,6 +120,9 @@ function Row({ label, value, highlight }) {
 function ProductsTable({ products }) {
   const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
   
+  // Check if any product has a description
+  const hasDescriptions = products.some(p => p.description && p.description.trim());
+  
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #F1F5F9' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
@@ -130,6 +133,7 @@ function ProductsTable({ products }) {
           <tr style={{ background: '#E6F7F3' }}>
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Product</th>
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Material</th>
+            {hasDescriptions && <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Description</th>}
             <th style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Qty</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Unit Cost</th>
             <th style={{ padding: '8px 6px', textAlign: 'right', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Total</th>
@@ -137,22 +141,23 @@ function ProductsTable({ products }) {
         </thead>
         <tbody>
            {products.map((p, i) => (
-             <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
-               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.product_type}</td>
-               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.material}</td>
-               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
-                 {p.quantity} {p.unit}
-               </td>
-               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#1A202C' }}>
-                 ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
-               </td>
-               <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600, color: '#1A202C' }}>
-                 ₹{Number(p.sale_cost).toLocaleString('en-IN')}
-               </td>
-             </tr>
+              <tr key={i} style={{ background: i % 2 === 0 ? '#F8FAFB' : '#fff' }}>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.product_type}</td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#1A202C', fontWeight: 600 }}>{p.material}</td>
+                {hasDescriptions && <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', color: '#64748B', fontSize: 12 }}>{p.description || '-'}</td>}
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'center', color: '#64748B' }}>
+                  {p.quantity} {p.unit}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', color: '#1A202C' }}>
+                  ₹{Number(p.unit_cost || 0).toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: '8px 6px', borderBottom: '1px solid #F1F5F9', textAlign: 'right', fontWeight: 600, color: '#1A202C' }}>
+                  ₹{Number(p.sale_cost).toLocaleString('en-IN')}
+                </td>
+              </tr>
            ))}
           <tr style={{ background: '#E6F7F3' }}>
-            <td colSpan={4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
+            <td colSpan={hasDescriptions ? 5 : 4} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Total</td>
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>

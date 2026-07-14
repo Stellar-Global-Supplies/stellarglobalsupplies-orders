@@ -146,12 +146,16 @@ ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:al
 function productsTable(products) {
   const total = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
   
+  // Check if any product has a description
+  const hasDescriptions = products.some(p => p.description && p.description.trim());
+  
   return `
   <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation"
     style="border:1.5px solid ${B.border};border-radius:12px;overflow:hidden;border-collapse:collapse;">
     <tr style="background:${B.teal};">
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Product Type</th>
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Material</th>
+      ${hasDescriptions ? `<th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:left;">Description</th>` : ''}
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:center;">Qty</th>
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">Unit Cost</th>
       <th style="padding:12px 10px;font-size:12px;color:#fff;font-weight:700;text-align:right;">Total</th>
@@ -160,12 +164,13 @@ function productsTable(products) {
     <tr style="background:${i % 2 === 0 ? B.white : B.grey};">
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.product_type}</td>
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;border-bottom:1px solid ${B.border};">${p.material}</td>
+      ${hasDescriptions ? `<td style="padding:11px 10px;font-size:12px;color:${B.muted};font-weight:400;border-bottom:1px solid ${B.border};">${p.description || '-'}</td>` : ''}
       <td style="padding:11px 10px;font-size:13px;color:${B.muted};font-weight:500;text-align:center;border-bottom:1px solid ${B.border};">${p.quantity} ${p.unit}</td>
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:600;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(p.unit_cost || 0)}</td>
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:700;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(p.sale_cost)}</td>
     </tr>`).join('')}
     <tr style="background:${B.tealLight};">
-      <td colspan="4" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">Total</td>
+      <td colspan="${hasDescriptions ? 5 : 4}" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">Total</td>
       <td style="padding:12px 10px;font-size:16px;color:${B.tealDark};font-weight:800;text-align:right;">${formatCurrency(total)}</td>
     </tr>
   </table>`;

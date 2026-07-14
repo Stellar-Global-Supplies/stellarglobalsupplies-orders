@@ -196,6 +196,7 @@ exports.handler = async (event) => {
     unit:         p.unit || 'Pieces',
     unit_cost:    Number(p.unit_cost) || 0,
     sale_cost:    Number(p.sale_cost),
+    description:  p.description || '',
   }));
 
   const { error: itemsErr } = await supabase

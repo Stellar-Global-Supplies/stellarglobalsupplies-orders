@@ -52,6 +52,9 @@ export function buildWhatsAppMessage(order, orderItems = null) {
     lines.push(`📐 ${p.quantity} ${p.unit}`);
     if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
     lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
+    if (p.description && p.description.trim()) {
+      lines.push(`📝 ${p.description.trim()}`);
+    }
     if (i < products.length - 1) lines.push(``);
   });
 
@@ -134,6 +137,9 @@ export function buildBusinessWhatsAppMessage(order, orderItems = null) {
     lines.push(`📐 ${p.quantity} ${p.unit}`);
     if (p.unit_cost) lines.push(`💲 Unit: ₹${fmt(p.unit_cost)}`);
     lines.push(`💰 Total: ₹${fmt(p.sale_cost)}`);
+    if (p.description && p.description.trim()) {
+      lines.push(`📝 ${p.description.trim()}`);
+    }
     if (i < products.length - 1) lines.push(``);
   });
 
