@@ -206,7 +206,7 @@ exports.handler = async (event) => {
   // Fetch order items for email
   const { data: orderItems, error: itemsErr } = await supabase
     .from('order_items')
-    .select('product_type, material, quantity, unit, sale_cost, description')
+    .select('product_type, material, quantity, unit, sale_cost, cgst, sgst, description')
     .eq('order_id', orderId)
     .order('created_at', { ascending: true });
 

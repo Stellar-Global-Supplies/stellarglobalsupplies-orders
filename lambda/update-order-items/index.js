@@ -73,7 +73,7 @@ exports.handler = async (event) => {
       try { body = JSON.parse(event.body || '{}'); }
       catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
-      const { product_type, material, quantity, unit, unit_cost, sale_cost, description } = body;
+      const { product_type, material, quantity, unit, unit_cost, sale_cost, cgst, sgst, description } = body;
 
       if (!product_type || !material || !quantity || !sale_cost)
         return respond(400, { message: 'Missing required product fields' });
@@ -86,6 +86,8 @@ exports.handler = async (event) => {
         unit: unit || 'Pieces',
         unit_cost: Number(unit_cost) || 0,
         sale_cost: Number(sale_cost),
+        cgst: Number(cgst) || 0,
+        sgst: Number(sgst) || 0,
         description: description || '',
       };
 
@@ -100,16 +102,18 @@ exports.handler = async (event) => {
         return respond(500, { message: 'Failed to add product', detail: insertErr.message });
       }
 
-      // Recalculate order total
+      // Recalculate order total and taxes
       const { data: allItems } = await supabase
         .from('order_items')
-        .select('sale_cost')
+        .select('sale_cost, cgst, sgst')
         .eq('order_id', orderId);
 
       const newTotal = calculateTotal(allItems || []);
+      const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
+      const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
       await supabase
         .from('orders')
-        .update({ sale_cost: newTotal })
+        .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
         .eq('id', orderId);
 
       return respond(201, item);
@@ -139,6 +143,8 @@ exports.handler = async (event) => {
       if (body.unit) updates.unit = body.unit;
       if (body.unit_cost !== undefined) updates.unit_cost = Number(body.unit_cost);
       if (body.sale_cost !== undefined) updates.sale_cost = Number(body.sale_cost);
+      if (body.cgst !== undefined) updates.cgst = Number(body.cgst);
+      if (body.sgst !== undefined) updates.sgst = Number(body.sgst);
       if (body.description !== undefined) updates.description = body.description;
 
       const { data: updatedItem, error: updateErr } = await supabase
@@ -153,16 +159,18 @@ exports.handler = async (event) => {
         return respond(500, { message: 'Failed to update product', detail: updateErr.message });
       }
 
-      // Recalculate order total
+      // Recalculate order total and taxes
       const { data: allItems } = await supabase
         .from('order_items')
-        .select('sale_cost')
+        .select('sale_cost, cgst, sgst')
         .eq('order_id', orderId);
 
       const newTotal = calculateTotal(allItems || []);
+      const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
+      const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
       await supabase
         .from('orders')
-        .update({ sale_cost: newTotal })
+        .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
         .eq('id', orderId);
 
       return respond(200, updatedItem);
@@ -190,16 +198,18 @@ exports.handler = async (event) => {
         return respond(500, { message: 'Failed to delete product', detail: deleteErr.message });
       }
 
-      // Recalculate order total
+      // Recalculate order total and taxes
       const { data: allItems } = await supabase
         .from('order_items')
-        .select('sale_cost')
+        .select('sale_cost, cgst, sgst')
         .eq('order_id', orderId);
 
       const newTotal = calculateTotal(allItems || []);
+      const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
+      const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
       await supabase
         .from('orders')
-        .update({ sale_cost: newTotal })
+        .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
         .eq('id', orderId);
 
       return respond(200, { message: 'Product deleted successfully' });

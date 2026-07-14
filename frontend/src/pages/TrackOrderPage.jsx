@@ -133,7 +133,8 @@ function ProductsTable({ products }) {
       <div style={{ fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
         Products ({products.length})
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', margin: '0 -4px', padding: '0 4px' }}>
+      <table style={{ width: '100%', minWidth: 520, borderCollapse: 'collapse', fontSize: 12 }}>
         <thead>
           <tr style={{ background: '#E6F7F3' }}>
             <th style={{ padding: '8px 6px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: '#009B76' }}>Product</th>
@@ -181,9 +182,10 @@ function ProductsTable({ products }) {
             <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E', textAlign: 'right' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>
-          </tr>
-        </tbody>
-      </table>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

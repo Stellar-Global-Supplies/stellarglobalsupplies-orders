@@ -184,7 +184,7 @@ function productsTable(products) {
       <td style="padding:11px 10px;font-size:13px;color:${B.text};font-weight:700;text-align:right;border-bottom:1px solid ${B.border};">${formatCurrency(productTotal)}</td>
     </tr>`}).join('')}
     <tr style="background:${B.tealLight};">
-      <td colspan="${hasDescriptions ? (hasTaxes ? 6 : 4) : (hasTaxes ? 5 : 3)}" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">${hasTaxes ? 'Grand Total' : 'Total'}</td>
+      <td colspan="${hasDescriptions ? (hasTaxes ? 7 : 5) : (hasTaxes ? 6 : 4)}" style="padding:12px 10px;font-size:14px;font-weight:700;text-align:right;color:${B.navy};">${hasTaxes ? 'Grand Total' : 'Total'}</td>
       <td style="padding:12px 10px;font-size:16px;color:${B.tealDark};font-weight:800;text-align:right;">${formatCurrency(grandTotal)}</td>
     </tr>
   </table>`;
