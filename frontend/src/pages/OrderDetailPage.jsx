@@ -670,10 +670,11 @@ export default function OrderDetailPage() {
                             className="form-control"
                             value={skus.includes(product.product_type) ? product.product_type : 'custom_other'}
                             onChange={(e) => {
-                              if (e.target.value === 'custom_other') {
-                                updateEditedProduct(index, 'product_type')('');
+                              const val = e.target.value;
+                              if (val === 'custom_other') {
+                                updateEditedProduct(index, 'product_type', '');
                               } else {
-                                updateEditedProduct(index, 'product_type')(e.target.value);
+                                updateEditedProduct(index, 'product_type', val);
                               }
                             }}
                             disabled={skuLoading}
@@ -687,7 +688,7 @@ export default function OrderDetailPage() {
                             className="form-control"
                             placeholder="Type custom product type..."
                             value={product.product_type}
-                            onChange={(e) => updateEditedProduct(index, 'product_type')(e.target.value)}
+                            onChange={(e) => updateEditedProduct(index, 'product_type', e.target.value)}
                             style={{ flex: 1, display: !skus.includes(product.product_type) ? 'block' : 'none' }}
                           />
                         </div>
@@ -698,10 +699,11 @@ export default function OrderDetailPage() {
                             className="form-control"
                             value={materials.includes(product.material) ? product.material : 'custom_other'}
                             onChange={(e) => {
-                              if (e.target.value === 'custom_other') {
-                                updateEditedProduct(index, 'material')('');
+                              const val = e.target.value;
+                              if (val === 'custom_other') {
+                                updateEditedProduct(index, 'material', '');
                               } else {
-                                updateEditedProduct(index, 'material')(e.target.value);
+                                updateEditedProduct(index, 'material', val);
                               }
                             }}
                             disabled={matLoading}
@@ -715,7 +717,7 @@ export default function OrderDetailPage() {
                             className="form-control"
                             placeholder="Type custom material..."
                             value={product.material}
-                            onChange={(e) => updateEditedProduct(index, 'material')(e.target.value)}
+                            onChange={(e) => updateEditedProduct(index, 'material', e.target.value)}
                             style={{ flex: 1, display: !materials.includes(product.material) ? 'block' : 'none' }}
                           />
                         </div>
