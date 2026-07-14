@@ -25,7 +25,12 @@ export default function DashboardPage() {
     processing: orders.filter((o) => o.status === 'Processing').length,
     ready:      orders.filter((o) => o.status === 'Ready to Dispatch').length,
     delivered:  orders.filter((o) => o.status === 'Delivered').length,
-    revenue:    orders.reduce((s, o) => s + Number(o.sale_cost), 0),
+    revenue:    orders.reduce((s, o) => {
+      const saleCost = Number(o.sale_cost) || 0;
+      const cgst = Number(o.cgst_total) || 0;
+      const sgst = Number(o.sgst_total) || 0;
+      return s + saleCost + cgst + sgst;
+    }, 0),
   };
 
   const recent = [...orders]

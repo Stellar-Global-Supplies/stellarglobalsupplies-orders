@@ -155,8 +155,10 @@ exports.handler = async (event) => {
     return v.toString(16);
   });
 
-  // Calculate total cost from all products
+  // Calculate total cost and tax totals from all products
   const totalCost = products.reduce((sum, p) => sum + Number(p.sale_cost), 0);
+  const cgstTotal = products.reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
+  const sgstTotal = products.reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
 
   // Use first product for backward compatibility with orders table
   const firstProduct = products[0];
@@ -173,6 +175,8 @@ exports.handler = async (event) => {
       quantity:          Number(firstProduct.quantity),
       unit:              firstProduct.unit || 'Pieces',
       sale_cost:         totalCost, // Store total in main order
+      cgst_total:        cgstTotal,
+      sgst_total:        sgstTotal,
       payment_status:    payment_status || 'Pending',
       delivery_timeline: delivery_timeline || null,
       status:            'Order Received',

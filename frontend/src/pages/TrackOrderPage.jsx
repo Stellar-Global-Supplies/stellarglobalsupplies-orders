@@ -178,7 +178,7 @@ function ProductsTable({ products }) {
            })}
           <tr style={{ background: '#E6F7F3' }}>
             <td colSpan={hasDescriptions ? 7 : 6} style={{ padding: '10px 6px', fontWeight: 700, textAlign: 'right', color: '#009B76' }}>Grand Total</td>
-            <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E' }}>
+            <td style={{ padding: '10px 6px', fontWeight: 700, fontSize: 14, color: '#00B98E', textAlign: 'right' }}>
               ₹{total.toLocaleString('en-IN')}
             </td>
           </tr>
