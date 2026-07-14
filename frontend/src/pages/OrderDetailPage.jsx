@@ -12,6 +12,9 @@ import {
   delayOrder,
   deliverOrder,
   isInvoiceValid,
+  addOrderItem,
+  updateOrderItem,
+  deleteOrderItem,
 } from '../utils/api';
 import { StatusBadge, PaymentBadge } from '../components/StatusBadge';
 import OrderTimeline, { STATUS_ORDER } from '../components/OrderTimeline';
@@ -107,6 +110,9 @@ export default function OrderDetailPage() {
   const [newDeliveryDate, setNewDeliveryDate] = useState(null);
   const [invoiceFile,    setInvoiceFile]    = useState(null);
   const [paymentStatus,  setPaymentStatus]  = useState('');
+  const [editingProducts, setEditingProducts] = useState(false);
+  const [editedProducts, setEditedProducts] = useState([]);
+  const [savingProducts, setSavingProducts] = useState(false);
 
   const loadOrder = async () => {
     setLoading(true);
@@ -189,6 +195,112 @@ export default function OrderDetailPage() {
     } finally {
       setSendingEmail(false);
       setInvoiceFile(null);
+    }
+  };
+
+  // ── Product Editing Functions ───────────────────────────────────────
+  const startEditing = () => {
+    setEditedProducts([...orderItems]);
+    setEditingProducts(true);
+  };
+
+  const cancelEditing = () => {
+    setEditedProducts([]);
+    setEditingProducts(false);
+  };
+
+  const updateEditedProduct = (index, field, value) => {
+    setEditedProducts(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      
+      // Auto-calculate sale_cost when unit_cost or quantity changes
+      if (field === 'unit_cost' || field === 'quantity') {
+        const unitCost = parseFloat(updated[index].unit_cost) || 0;
+        const qty = parseFloat(updated[index].quantity) || 0;
+        updated[index].sale_cost = (unitCost * qty).toFixed(2);
+      }
+      
+      return updated;
+    });
+  };
+
+  const addNewProduct = () => {
+    setEditedProducts(prev => [...prev, {
+      product_type: '',
+      material: '',
+      quantity: '',
+      unit: 'Pieces',
+      unit_cost: '',
+      sale_cost: '',
+      description: '',
+    }]);
+  };
+
+  const removeProduct = (index) => {
+    if (editedProducts.length === 1) {
+      toast.error('At least one product is required');
+      return;
+    }
+    setEditedProducts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const saveProducts = async () => {
+    // Validate
+    for (let i = 0; i < editedProducts.length; i++) {
+      const p = editedProducts[i];
+      if (!p.product_type || !p.material || !p.quantity || !p.sale_cost) {
+        toast.error(`Product ${i + 1}: Please fill all required fields`);
+        return;
+      }
+    }
+
+    setSavingProducts(true);
+    try {
+      // Compare current items with edited items
+      const currentIds = orderItems.map(p => p.id).filter(Boolean);
+      const editedIds = editedProducts.map(p => p.id).filter(Boolean);
+      
+      // Delete removed products
+      const toDelete = currentIds.filter(id => !editedIds.includes(id));
+      for (const itemId of toDelete) {
+        await deleteOrderItem(order.id, itemId);
+      }
+
+      // Update existing and add new products
+      for (const product of editedProducts) {
+        if (product.id) {
+          // Update existing
+          await updateOrderItem(order.id, product.id, {
+            product_type: product.product_type,
+            material: product.material,
+            quantity: Number(product.quantity),
+            unit: product.unit,
+            unit_cost: Number(product.unit_cost) || 0,
+            sale_cost: Number(product.sale_cost),
+            description: product.description || '',
+          });
+        } else {
+          // Add new
+          await addOrderItem(order.id, {
+            product_type: product.product_type,
+            material: product.material,
+            quantity: Number(product.quantity),
+            unit: product.unit,
+            unit_cost: Number(product.unit_cost) || 0,
+            sale_cost: Number(product.sale_cost),
+            description: product.description || '',
+          });
+        }
+      }
+
+      toast.success('Products updated successfully');
+      setEditingProducts(false);
+      await loadOrder();
+    } catch (err) {
+      toast.error(err.message || 'Failed to update products');
+    } finally {
+      setSavingProducts(false);
     }
   };
 
@@ -441,6 +553,21 @@ export default function OrderDetailPage() {
             </button>
           )}
 
+          {/* Edit Products — only when not Delivered */}
+          {order.status !== 'Delivered' && !editingProducts && (
+            <button
+              className="btn btn-secondary"
+              onClick={startEditing}
+              disabled={updatingStatus}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Edit Products
+            </button>
+          )}
+
           {order.status === 'Delivered' && (
             <span className="btn" style={{ background: 'var(--brand-teal-light)', color: 'var(--brand-teal)', cursor: 'default' }}>
               ✅ Complete
@@ -483,7 +610,112 @@ export default function OrderDetailPage() {
               <DetailRow label="Current Status" value={<StatusBadge status={order.status} />} />
 
               {/* Products table - show if there are multiple products */}
-              {orderItems.length > 0 && <ProductsTable products={orderItems} />}
+              {!editingProducts && orderItems.length > 0 && <ProductsTable products={orderItems} />}
+
+              {/* ── Edit Products Mode ────────────────────────────────────── */}
+              {editingProducts && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--neutral-500)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Edit Products ({editedProducts.length})
+                  </div>
+                  {editedProducts.map((product, index) => (
+                    <div key={index} style={{
+                      background: index % 2 === 0 ? 'var(--neutral-50)' : '#fff',
+                      padding: '12px',
+                      marginBottom: '8px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--neutral-700)' }}>
+                          Product {index + 1}
+                        </span>
+                        {editedProducts.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => removeProduct(index)}
+                            style={{ padding: '4px 8px' }}
+                          >
+                            ✕ Remove
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                        <input
+                          className="form-control"
+                          placeholder="Product Type *"
+                          value={product.product_type}
+                          onChange={(e) => updateEditedProduct(index, 'product_type', e.target.value)}
+                        />
+                        <input
+                          className="form-control"
+                          placeholder="Material *"
+                          value={product.material}
+                          onChange={(e) => updateEditedProduct(index, 'material', e.target.value)}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                        <input
+                          className="form-control"
+                          type="number"
+                          placeholder="Quantity *"
+                          value={product.quantity}
+                          onChange={(e) => updateEditedProduct(index, 'quantity', e.target.value)}
+                        />
+                        <select
+                          className="form-control"
+                          value={product.unit}
+                          onChange={(e) => updateEditedProduct(index, 'unit', e.target.value)}
+                        >
+                          <option value="Pieces">Pieces</option>
+                          <option value="Kgs">Kgs</option>
+                        </select>
+                        <input
+                          className="form-control"
+                          type="number"
+                          placeholder="Sale Cost (₹) *"
+                          value={product.sale_cost}
+                          onChange={(e) => updateEditedProduct(index, 'sale_cost', e.target.value)}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                        <input
+                          className="form-control"
+                          type="number"
+                          placeholder="Unit Cost (₹)"
+                          value={product.unit_cost}
+                          onChange={(e) => updateEditedProduct(index, 'unit_cost', e.target.value)}
+                        />
+                        <input
+                          className="form-control"
+                          placeholder="Description (optional)"
+                          value={product.description}
+                          onChange={(e) => updateEditedProduct(index, 'description', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={addNewProduct}
+                    style={{ width: '100%', marginBottom: '12px' }}
+                  >
+                    + Add Another Product
+                  </button>
+
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-secondary" onClick={cancelEditing} disabled={savingProducts}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-primary" onClick={saveProducts} disabled={savingProducts}>
+                      {savingProducts ? <><span className="spinner" /> Saving…</> : 'Save Changes'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* ── Invoice Download ─────────────────────────────────────────
                   FIX: Use isInvoiceValid() for consistent expiry logic.

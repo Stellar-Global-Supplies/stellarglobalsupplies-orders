@@ -372,6 +372,27 @@ export default function TrackOrderPage() {
              
              {/* Products table */}
              <ProductsTable products={products} />
+
+             {/* Transport charges note - subtle, only show if not delivered */}
+             {!isDelivered && (
+               <div style={{
+                 marginTop: 12,
+                 padding: '10px 14px',
+                 background: '#F8FAFB',
+                 borderRadius: 8,
+                 borderLeft: '3px solid #DDE4EB',
+               }}>
+                 <p style={{
+                   margin: 0,
+                   fontSize: 12,
+                   color: '#94A3B4',
+                   fontStyle: 'italic',
+                   lineHeight: 1.6,
+                 }}>
+                   Note: Transport and other related charges will be added when order is ready to dispatch.
+                 </p>
+               </div>
+             )}
            </div>
          </div>
 

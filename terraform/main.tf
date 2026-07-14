@@ -396,6 +396,12 @@ resource "aws_cloudwatch_log_group" "get_order_by_token" {
   tags              = local.common_tags
 }
 
+resource "aws_cloudwatch_log_group" "update_order_items" {
+  name              = "/aws/lambda/${local.name_prefix}-update-order-items"
+  retention_in_days = 1
+  tags              = local.common_tags
+}
+
 ##############################################################################
 # Lambda — shared env
 ##############################################################################
@@ -495,6 +501,30 @@ resource "aws_lambda_function" "get_order_by_token" {
   timeout          = 15
   memory_size      = 128
   depends_on       = [aws_cloudwatch_log_group.get_order_by_token]
+  environment { variables = local.lambda_base_env }
+  tags = local.common_tags
+}
+
+##############################################################################
+# Lambda — update-order-items (add/edit/delete products)
+##############################################################################
+data "archive_file" "update_order_items" {
+  type        = "zip"
+  source_dir  = "${path.module}/../lambda/update-order-items"
+  output_path = "${local.lambda_zip_dir}/update-order-items.zip"
+  depends_on  = [null_resource.lambda_zips_dir]
+}
+
+resource "aws_lambda_function" "update_order_items" {
+  filename         = data.archive_file.update_order_items.output_path
+  function_name    = "${local.name_prefix}-update-order-items"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
+  runtime          = "nodejs20.x"
+  source_code_hash = data.archive_file.update_order_items.output_base64sha256
+  timeout          = 30
+  memory_size      = 256
+  depends_on       = [aws_cloudwatch_log_group.update_order_items]
   environment { variables = local.lambda_base_env }
   tags = local.common_tags
 }
@@ -659,6 +689,48 @@ resource "aws_lambda_permission" "apigw_get_order_by_token" {
   source_arn    = "${aws_apigatewayv2_api.oms.execution_arn}/*/*"
 }
 
+# Update order items permissions
+resource "aws_lambda_permission" "apigw_update_order_items" {
+  statement_id  = "AllowAPIGWUpdateOrderItems"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.update_order_items.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.oms.execution_arn}/*/*"
+}
+
+##############################################################################
+# API Gateway Routes — Order Items Management
+##############################################################################
+
+# Integration for order items
+resource "aws_apigatewayv2_integration" "update_order_items" {
+  api_id                 = aws_apigatewayv2_api.oms.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.update_order_items.invoke_arn
+  payload_format_version = "2.0"
+}
+
+# POST /orders/{id}/items - Add product
+resource "aws_apigatewayv2_route" "post_order_items" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "POST /orders/{id}/items"
+  target    = "integrations/${aws_apigatewayv2_integration.update_order_items.id}"
+}
+
+# PATCH /orders/{id}/items/{itemId} - Update product
+resource "aws_apigatewayv2_route" "patch_order_item" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "PATCH /orders/{id}/items/{itemId}"
+  target    = "integrations/${aws_apigatewayv2_integration.update_order_items.id}"
+}
+
+# DELETE /orders/{id}/items/{itemId} - Delete product
+resource "aws_apigatewayv2_route" "delete_order_item" {
+  api_id    = aws_apigatewayv2_api.oms.id
+  route_key = "DELETE /orders/{id}/items/{itemId}"
+  target    = "integrations/${aws_apigatewayv2_integration.update_order_items.id}"
+}
+
 ##############################################################################
 # SSM — store outputs for GitHub Actions fallback
 ##############################################################################
@@ -696,7 +768,8 @@ output "lambda_function_names" {
     aws_lambda_function.create_order.function_name,
     aws_lambda_function.update_status.function_name,
     aws_lambda_function.send_notification.function_name,
-    aws_lambda_function.get_order_by_token.function_name
+    aws_lambda_function.get_order_by_token.function_name,
+    aws_lambda_function.update_order_items.function_name
   ]
 }
 

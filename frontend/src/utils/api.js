@@ -162,3 +162,47 @@ export function isInvoiceValid(order) {
   const expiresAt  = new Date(uploadedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
   return new Date() < expiresAt;
 }
+
+// Add new product to order
+export async function addOrderItem(orderId, product) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/orders/${orderId}/items`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(product),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(err.message || 'Failed to add product');
+  }
+  return res.json();
+}
+
+// Update existing product
+export async function updateOrderItem(orderId, itemId, updates) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/orders/${orderId}/items/${itemId}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(err.message || 'Failed to update product');
+  }
+  return res.json();
+}
+
+// Delete product from order
+export async function deleteOrderItem(orderId, itemId) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_BASE}/orders/${orderId}/items/${itemId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Request failed' }));
+    throw new Error(err.message || 'Failed to delete product');
+  }
+  return res.json();
+}
