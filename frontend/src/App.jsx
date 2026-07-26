@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth';
@@ -16,8 +16,8 @@ import { setUser, clearUser, recordNavigation } from './tracing';
 // Records page navigations as OTLP spans so NR shows which pages users visit
 function RouteTracker() {
   const location = useLocation();
-  const prevRef  = React.useRef('');
-  React.useEffect(() => {
+  const prevRef  = useRef('');
+  useEffect(() => {
     recordNavigation(location.pathname, prevRef.current);
     prevRef.current = location.pathname;
   }, [location.pathname]);
