@@ -211,34 +211,40 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
-      - name: Install Lambda dependencies
+      - name: Install Lambda dependencies (all deps for bundling)
         working-directory: lambda
-        run: npm install --omit=dev
+        run: npm install
 
-      # ── Inject shared/tracing.js into each Lambda package ─────────────────
-      # Each Lambda is zipped from its own subdirectory and requires
-      # '../shared/tracing'. We copy the shared dir into each Lambda
-      # folder at package time so the relative path resolves inside the zip.
-      - name: Inject shared tracing into Lambda packages
+      # ── esbuild — bundle each Lambda into a single minified file ──────────
+      # This replaces the old approach of copying node_modules into each zip.
+      # Result: each Lambda zip is ~700KB instead of 230MB+.
+      # aws-sdk is excluded (provided by the Lambda Node.js 20 runtime).
+      # shared/tracing.js is resolved at build time by esbuild — no copy needed.
+      - name: Bundle all Lambdas with esbuild
         working-directory: lambda
         run: |
-          for DIR in create-order update-order-status update-order-items send-notification get-order-by-token; do
-            mkdir -p $DIR/shared
-            cp shared/tracing.js $DIR/shared/tracing.js
-            echo "✓ Copied shared/tracing.js → $DIR/shared/"
+          mkdir -p dist
+          for FN in create-order update-order-status update-order-items send-notification get-order-by-token; do
+            echo "→ Bundling $FN..."
+            ./node_modules/.bin/esbuild $FN/index.js \
+              --bundle \
+              --platform=node \
+              --target=node20 \
+              --outfile=dist/$FN/index.js \
+              --external:aws-sdk \
+              --minify
+            echo "✓ $FN: $(du -sh dist/$FN/index.js | cut -f1)"
           done
 
       # ── create-order ──────────────────────────────────────────────────────
       - name: Package & deploy create-order
         working-directory: lambda
         run: |
-          cd create-order
-          cp -r ../node_modules ./node_modules
-          zip -qr ../create-order.zip .
-          rm -rf ./node_modules
+          cd dist/create-order
+          zip -q ../../create-order.zip index.js
           aws lambda update-function-code \
             --function-name stellar-oms-create-order \
-            --zip-file fileb://../create-order.zip \
+            --zip-file fileb://../../create-order.zip \
             --no-cli-pager
           aws lambda wait function-updated \
             --function-name stellar-oms-create-order
@@ -247,20 +253,11 @@ jobs:
       - name: Package & deploy update-order-status
         working-directory: lambda
         run: |
-          cd update-order-status
-          cp -r ../node_modules ./node_modules
-          # needs emailTemplates from create-order
-          mkdir -p ./lib
-          cp ../create-order/emailTemplates.js ./lib/emailTemplates.js
-          # fix require path in index.js at deploy time
-          sed 's|../create-order/emailTemplates|./lib/emailTemplates|g' index.js > index_patched.js
-          mv index_patched.js index.js
-          zip -qr ../update-order-status.zip .
-          rm -rf ./node_modules ./lib
-          git checkout index.js 2>/dev/null || true
+          cd dist/update-order-status
+          zip -q ../../update-order-status.zip index.js
           aws lambda update-function-code \
             --function-name stellar-oms-update-order-status \
-            --zip-file fileb://../update-order-status.zip \
+            --zip-file fileb://../../update-order-status.zip \
             --no-cli-pager
           aws lambda wait function-updated \
             --function-name stellar-oms-update-order-status
@@ -269,18 +266,11 @@ jobs:
       - name: Package & deploy send-notification
         working-directory: lambda
         run: |
-          cd send-notification
-          cp -r ../node_modules ./node_modules
-          mkdir -p ./lib
-          cp ../create-order/emailTemplates.js ./lib/emailTemplates.js
-          sed 's|../create-order/emailTemplates|./lib/emailTemplates|g' index.js > index_patched.js
-          mv index_patched.js index.js
-          zip -qr ../send-notification.zip .
-          rm -rf ./node_modules ./lib
-          git checkout index.js 2>/dev/null || true
+          cd dist/send-notification
+          zip -q ../../send-notification.zip index.js
           aws lambda update-function-code \
             --function-name stellar-oms-send-notification \
-            --zip-file fileb://../send-notification.zip \
+            --zip-file fileb://../../send-notification.zip \
             --no-cli-pager
           aws lambda wait function-updated \
             --function-name stellar-oms-send-notification
@@ -310,13 +300,11 @@ jobs:
       - name: Package & deploy get-order-by-token
         working-directory: lambda
         run: |
-          cd get-order-by-token
-          cp -r ../node_modules ./node_modules
-          zip -qr ../get-order-by-token.zip .
-          rm -rf ./node_modules
+          cd dist/get-order-by-token
+          zip -q ../../get-order-by-token.zip index.js
           aws lambda update-function-code \
             --function-name stellar-oms-get-order-by-token \
-            --zip-file fileb://../get-order-by-token.zip \
+            --zip-file fileb://../../get-order-by-token.zip \
             --no-cli-pager
           aws lambda wait function-updated \
             --function-name stellar-oms-get-order-by-token
@@ -325,13 +313,11 @@ jobs:
       - name: Package & deploy update-order-items
         working-directory: lambda
         run: |
-          cd update-order-items
-          cp -r ../node_modules ./node_modules
-          zip -qr ../update-order-items.zip .
-          rm -rf ./node_modules
+          cd dist/update-order-items
+          zip -q ../../update-order-items.zip index.js
           aws lambda update-function-code \
             --function-name stellar-oms-update-order-items \
-            --zip-file fileb://../update-order-items.zip \
+            --zip-file fileb://../../update-order-items.zip \
             --no-cli-pager
           aws lambda wait function-updated \
             --function-name stellar-oms-update-order-items
