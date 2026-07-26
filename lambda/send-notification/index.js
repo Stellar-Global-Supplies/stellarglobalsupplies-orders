@@ -12,6 +12,7 @@ let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
 catch (e) { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildOrderConfirmationEmail, buildStatusUpdateEmail } = emailTemplates;
+const { tracedHandler, withSpan, supabaseSpan } = require('../shared/tracing');
 
 const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
 const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-production';
@@ -180,7 +181,7 @@ function respond(code, body) {
   };
 }
 
-exports.handler = async (event) => {
+const _handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   if (method === 'OPTIONS') return respond(200, {});
 
@@ -199,26 +200,28 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); } catch (e) {}
   const type = body.type || 'status_update'; // 'confirmation' | 'status_update'
 
-  const { data: order, error: fetchErr } = await supabase
-    .from('orders').select('*').eq('id', orderId).single();
+  const { data: order, error: fetchErr } = await supabaseSpan('orders', 'SELECT', () => supabase
+    .from('orders').select('*').eq('id', orderId).single());
   if (fetchErr || !order) return respond(404, { message: 'Order not found' });
 
   // Fetch order items for email
-  const { data: orderItems, error: itemsErr } = await supabase
+  const { data: orderItems, error: itemsErr } = await supabaseSpan('order_items', 'SELECT', () => supabase
     .from('order_items')
     .select('product_type, material, quantity, unit, sale_cost, cgst, sgst, description')
     .eq('order_id', orderId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true }));
 
   try {
     const builder  = type === 'confirmation' ? buildOrderConfirmationEmail : buildStatusUpdateEmail;
     const { subject, html, text } = builder(order, orderItems || []);
     // Pass invoice URL for status update emails to include as attachment
     const invoiceUrl = type === 'status_update' ? order.invoice_url : null;
-    await sendEmail({ to: order.email, subject, html, text, invoiceUrl });
+    await withSpan('gmail.send.notification', { 'messaging.destination': order.email, 'messaging.system': 'gmail', 'notification.type': type }, () => sendEmail({ to: order.email, subject, html, text, invoiceUrl }));
     return respond(200, { message: 'Email sent', recipient: order.email, type });
   } catch (err) {
     console.error('Send notification error:', err);
     return respond(500, { message: 'Failed to send email', detail: err.message });
   }
 };
+
+exports.handler = tracedHandler('send-notification', _handler);

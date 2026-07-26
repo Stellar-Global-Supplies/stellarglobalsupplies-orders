@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { ThemeProvider } from './hooks/useTheme';
@@ -11,6 +11,18 @@ import NewOrderPage   from './pages/NewOrderPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import TrackOrderPage from './pages/TrackOrderPage';
 import './styles/globals.css';
+import { setUser, clearUser, recordNavigation } from './tracing';
+
+// Records page navigations as OTLP spans so NR shows which pages users visit
+function RouteTracker() {
+  const location = useLocation();
+  const prevRef  = React.useRef('');
+  React.useEffect(() => {
+    recordNavigation(location.pathname, prevRef.current);
+    prevRef.current = location.pathname;
+  }, [location.pathname]);
+  return null;
+}
 
 function RequireAuth() {
   const { user, loading } = useAuth();
@@ -55,6 +67,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
+          <RouteTracker />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 

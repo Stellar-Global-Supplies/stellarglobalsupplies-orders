@@ -7,6 +7,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const ws = require('ws');
+const { tracedHandler, supabaseSpan } = require('../shared/tracing');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -37,7 +38,7 @@ function calculateTotal(products) {
   return products.reduce((sum, p) => sum + Number(p.sale_cost || 0), 0);
 }
 
-exports.handler = async (event) => {
+const _handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   if (method === 'OPTIONS') return respond(200, {});
 
@@ -54,11 +55,11 @@ exports.handler = async (event) => {
   if (!orderId) return respond(400, { message: 'Order ID required' });
 
   // Verify order exists and is not delivered
-  const { data: order, error: orderErr } = await supabase
+  const { data: order, error: orderErr } = await supabaseSpan('orders', 'SELECT', () => supabase
     .from('orders')
     .select('id, status')
     .eq('id', orderId)
-    .single();
+    .single());
 
   if (orderErr || !order) return respond(404, { message: 'Order not found' });
   if (order.status === 'Delivered') return respond(400, { message: 'Cannot modify delivered order' });
@@ -91,11 +92,11 @@ exports.handler = async (event) => {
         description: description || '',
       };
 
-      const { data: item, error: insertErr } = await supabase
+      const { data: item, error: insertErr } = await supabaseSpan('order_items', 'INSERT', () => supabase
         .from('order_items')
         .insert(newItem)
         .select()
-        .single();
+        .single());
 
       if (insertErr) {
         console.error('Insert error:', insertErr);
@@ -103,18 +104,18 @@ exports.handler = async (event) => {
       }
 
       // Recalculate order total and taxes
-      const { data: allItems } = await supabase
+      const { data: allItems } = await supabaseSpan('order_items', 'SELECT', () => supabase
         .from('order_items')
         .select('sale_cost, cgst, sgst')
-        .eq('order_id', orderId);
+        .eq('order_id', orderId));
 
       const newTotal = calculateTotal(allItems || []);
       const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
       const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
-      await supabase
+      await supabaseSpan('orders', 'UPDATE', () => supabase
         .from('orders')
         .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
-        .eq('id', orderId);
+        .eq('id', orderId));
 
       return respond(201, item);
     }
@@ -126,12 +127,12 @@ exports.handler = async (event) => {
       catch (e) { return respond(400, { message: 'Invalid JSON' }); }
 
       // Verify item belongs to order
-      const { data: existingItem, error: itemErr } = await supabase
+      const { data: existingItem, error: itemErr } = await supabaseSpan('order_items', 'SELECT', () => supabase
         .from('order_items')
         .select('id')
         .eq('id', itemId)
         .eq('order_id', orderId)
-        .single();
+        .single());
 
       if (itemErr || !existingItem) return respond(404, { message: 'Product not found' });
 
@@ -147,12 +148,12 @@ exports.handler = async (event) => {
       if (body.sgst !== undefined) updates.sgst = Number(body.sgst);
       if (body.description !== undefined) updates.description = body.description;
 
-      const { data: updatedItem, error: updateErr } = await supabase
+      const { data: updatedItem, error: updateErr } = await supabaseSpan('order_items', 'UPDATE', () => supabase
         .from('order_items')
         .update(updates)
         .eq('id', itemId)
         .select()
-        .single();
+        .single());
 
       if (updateErr) {
         console.error('Update error:', updateErr);
@@ -160,18 +161,18 @@ exports.handler = async (event) => {
       }
 
       // Recalculate order total and taxes
-      const { data: allItems } = await supabase
+      const { data: allItems } = await supabaseSpan('order_items', 'SELECT', () => supabase
         .from('order_items')
         .select('sale_cost, cgst, sgst')
-        .eq('order_id', orderId);
+        .eq('order_id', orderId));
 
       const newTotal = calculateTotal(allItems || []);
       const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
       const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
-      await supabase
+      await supabaseSpan('orders', 'UPDATE', () => supabase
         .from('orders')
         .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
-        .eq('id', orderId);
+        .eq('id', orderId));
 
       return respond(200, updatedItem);
     }
@@ -179,19 +180,19 @@ exports.handler = async (event) => {
     // ── DELETE PRODUCT ─────────────────────────────────────────────────
     if (method === 'DELETE' && itemId) {
       // Verify item belongs to order
-      const { data: existingItem, error: itemErr } = await supabase
+      const { data: existingItem, error: itemErr } = await supabaseSpan('order_items', 'SELECT', () => supabase
         .from('order_items')
         .select('id')
         .eq('id', itemId)
         .eq('order_id', orderId)
-        .single();
+        .single());
 
       if (itemErr || !existingItem) return respond(404, { message: 'Product not found' });
 
-      const { error: deleteErr } = await supabase
+      const { error: deleteErr } = await supabaseSpan('order_items', 'DELETE', () => supabase
         .from('order_items')
         .delete()
-        .eq('id', itemId);
+        .eq('id', itemId));
 
       if (deleteErr) {
         console.error('Delete error:', deleteErr);
@@ -199,18 +200,18 @@ exports.handler = async (event) => {
       }
 
       // Recalculate order total and taxes
-      const { data: allItems } = await supabase
+      const { data: allItems } = await supabaseSpan('order_items', 'SELECT', () => supabase
         .from('order_items')
         .select('sale_cost, cgst, sgst')
-        .eq('order_id', orderId);
+        .eq('order_id', orderId));
 
       const newTotal = calculateTotal(allItems || []);
       const newCgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.cgst) || 0), 0);
       const newSgstTotal = (allItems || []).reduce((sum, p) => sum + (Number(p.sgst) || 0), 0);
-      await supabase
+      await supabaseSpan('orders', 'UPDATE', () => supabase
         .from('orders')
         .update({ sale_cost: newTotal, cgst_total: newCgstTotal, sgst_total: newSgstTotal })
-        .eq('id', orderId);
+        .eq('id', orderId));
 
       return respond(200, { message: 'Product deleted successfully' });
     }
@@ -221,3 +222,5 @@ exports.handler = async (event) => {
     return respond(500, { message: 'Internal server error', detail: err.message });
   }
 };
+
+exports.handler = tracedHandler('update-order-items', _handler);

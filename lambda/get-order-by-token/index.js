@@ -6,6 +6,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const ws = require('ws');
+const { tracedHandler, supabaseSpan } = require('../shared/tracing');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -48,7 +49,7 @@ const PUBLIC_ORDER_FIELDS = [
   'invoice_uploaded_at'
 ];
 
-exports.handler = async (event) => {
+const _handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   if (method === 'OPTIONS') return respond(200, {});
 
@@ -62,22 +63,22 @@ exports.handler = async (event) => {
   }
 
   // Fetch order by tracking token
-  const { data: order, error: fetchErr } = await supabase
+  const { data: order, error: fetchErr } = await supabaseSpan('orders', 'SELECT', () => supabase
     .from('orders')
     .select(PUBLIC_ORDER_FIELDS.join(','))
     .eq('tracking_token', token)
-    .single();
+    .single());
 
   if (fetchErr || !order) {
     return respond(404, { message: 'Order not found or invalid tracking token' });
   }
 
   // Fetch order items
-  const { data: orderItems, error: itemsErr } = await supabase
+  const { data: orderItems, error: itemsErr } = await supabaseSpan('order_items', 'SELECT', () => supabase
     .from('order_items')
     .select('product_type, material, quantity, unit, unit_cost, sale_cost, cgst, sgst, description')
     .eq('order_id', order.id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true }));
 
   // Return public order data with order items
   return respond(200, {
@@ -96,3 +97,5 @@ exports.handler = async (event) => {
     order_items: itemsErr ? [] : (orderItems || []),
   });
 };
+
+exports.handler = tracedHandler('get-order-by-token', _handler);

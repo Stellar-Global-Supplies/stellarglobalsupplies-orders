@@ -9,6 +9,7 @@ const { createClient }            = require('@supabase/supabase-js');
 const { google }                  = require('googleapis');
 const ws                          = require('ws');
 const { buildOrderConfirmationEmail } = require('./emailTemplates');
+const { tracedHandler, withSpan, supabaseSpan } = require('../shared/tracing');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -102,7 +103,7 @@ function respond(code, body) {
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
-exports.handler = async (event) => {
+const _handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   if (method === 'OPTIONS') return respond(200, {});
 
@@ -164,7 +165,7 @@ exports.handler = async (event) => {
   const firstProduct = products[0];
 
   // Insert order
-  const { data: order, error: insertErr } = await supabase
+  const { data: order, error: insertErr } = await supabaseSpan('orders', 'INSERT', () => supabase
     .from('orders')
     .insert({
       customer_name:     customer_name.trim(),
@@ -184,7 +185,7 @@ exports.handler = async (event) => {
       tracking_token:    trackingToken,
     })
     .select()
-    .single();
+    .single());
 
   if (insertErr) {
     console.error('Insert error:', insertErr);
@@ -205,9 +206,9 @@ exports.handler = async (event) => {
     description:  p.description || '',
   }));
 
-  const { error: itemsErr } = await supabase
+  const { error: itemsErr } = await supabaseSpan('order_items', 'INSERT', () => supabase
     .from('order_items')
-    .insert(orderItems);
+    .insert(orderItems));
 
   if (itemsErr) {
     console.error('Order items insert error:', itemsErr);
@@ -216,11 +217,15 @@ exports.handler = async (event) => {
 
   // Send confirmation email — non-blocking
   try {
-    const { subject, html, text } = buildOrderConfirmationEmail(order, products);
-    await sendEmail({ to: order.email, subject, html, text });
+    await withSpan('gmail.send.confirmation', { 'messaging.destination': order.email, 'messaging.system': 'gmail' }, async () => {
+      const { subject, html, text } = buildOrderConfirmationEmail(order, products);
+      await sendEmail({ to: order.email, subject, html, text });
+    });
   } catch (e) {
     console.error('Confirmation email error (non-fatal):', e.message);
   }
 
   return respond(201, order);
 };
+
+exports.handler = tracedHandler('create-order', _handler);

@@ -25,6 +25,7 @@ let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
 catch (e) { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildStatusUpdateEmail, buildDelayNotificationEmail } = emailTemplates;
+const { tracedHandler, withSpan, supabaseSpan } = require('../shared/tracing');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -260,7 +261,7 @@ function respond(code, body) {
   };
 }
 
-exports.handler = async (event) => {
+const _handler = async (event) => {
   const method = event.requestContext?.http?.method || event.httpMethod;
   if (method === 'OPTIONS') return respond(200, {});
 
@@ -286,14 +287,14 @@ exports.handler = async (event) => {
      const { delivery_timeline } = body;
      if (!delivery_timeline) return respond(400, { message: 'Delivery date required' });
 
-     const { data: currentOrder, error: fetchErr } = await supabase
-       .from('orders').select('*').eq('id', orderId).single();
+     const { data: currentOrder, error: fetchErr } = await supabaseSpan('orders', 'SELECT', () => supabase
+       .from('orders').select('*').eq('id', orderId).single());
      if (fetchErr || !currentOrder) return respond(404, { message: 'Order not found' });
 
-     const { data: updated, error: updateErr } = await supabase
+     const { data: updated, error: updateErr } = await supabaseSpan('orders', 'UPDATE', () => supabase
        .from('orders')
        .update({ delivery_timeline, updated_at: new Date().toISOString(), updated_by: user.id })
-       .eq('id', orderId).select().single();
+       .eq('id', orderId).select().single());
 
      if (updateErr) { console.error('Delay error:', updateErr); return respond(500, { message: 'Failed to delay order' }); }
 
@@ -347,12 +348,9 @@ exports.handler = async (event) => {
               const key = `invoices/${orderId}/${Date.now()}_${filename}`;
               try {
                 // FIX: No ACL — rely on bucket policy / pre-signed URLs instead
-                await s3.putObject({
-                  Bucket:      INVOICE_BUCKET,
-                  Key:         key,
-                  Body:        part.content,
-                  ContentType: mimeType,
-                }).promise();
+                await withSpan('s3.putObject', { 'aws.s3.bucket': INVOICE_BUCKET, 'aws.s3.key': key }, () => 
+                  s3.putObject({ Bucket: INVOICE_BUCKET, Key: key, Body: part.content, ContentType: mimeType }).promise()
+                );
 
                 invoiceS3Key = key;
 
@@ -389,17 +387,17 @@ exports.handler = async (event) => {
       updateData.invoice_uploaded_at = new Date().toISOString(); // FIX: always set this
     }
 
-    const { data: updated, error: updateErr } = await supabase
-      .from('orders').update(updateData).eq('id', orderId).select().single();
+    const { data: updated, error: updateErr } = await supabaseSpan('orders', 'UPDATE', () => supabase
+      .from('orders').update(updateData).eq('id', orderId).select().single());
 
     if (updateErr) { console.error('Deliver error:', updateErr); return respond(500, { message: 'Failed to mark as delivered' }); }
 
     // Fetch order items for email
-    const { data: orderItems, error: itemsErr } = await supabase
+    const { data: orderItems, error: itemsErr } = await supabaseSpan('order_items', 'SELECT', () => supabase
       .from('order_items')
       .select('product_type, material, quantity, unit, unit_cost, sale_cost, cgst, sgst, description')
       .eq('order_id', orderId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true }));
 
     // Send delivery email with invoice attachment (using S3 key, not URL)
     try {
@@ -419,8 +417,8 @@ exports.handler = async (event) => {
   if (!status || !VALID_STATUSES.includes(status))
     return respond(400, { message: `Invalid status. Valid values: ${VALID_STATUSES.join(', ')}` });
 
-  const { data: current, error: fetchErr } = await supabase
-    .from('orders').select('*').eq('id', orderId).single();
+  const { data: current, error: fetchErr } = await supabaseSpan('orders', 'SELECT', () => supabase
+    .from('orders').select('*').eq('id', orderId).single());
   if (fetchErr || !current) return respond(404, { message: 'Order not found' });
 
   const expectedNext = NEXT_STATUS[current.status];
@@ -438,8 +436,8 @@ exports.handler = async (event) => {
     updatePayload.payment_status = payment_status;
   }
 
-  const { data: updated, error: updateErr } = await supabase
-    .from('orders').update(updatePayload).eq('id', orderId).select().single();
+  const { data: updated, error: updateErr } = await supabaseSpan('orders', 'UPDATE', () => supabase
+    .from('orders').update(updatePayload).eq('id', orderId).select().single());
 
   if (updateErr) { console.error('Update error:', updateErr); return respond(500, { message: 'Failed to update order' }); }
 
@@ -457,3 +455,5 @@ exports.handler = async (event) => {
 
   return respond(200, updated);
 };
+
+exports.handler = tracedHandler('update-order-status', _handler);

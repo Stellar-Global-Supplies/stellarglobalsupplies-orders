@@ -51,6 +51,7 @@ jobs:
           REACT_APP_SUPABASE_ANON_KEY: placeholder-anon-key
           REACT_APP_API_BASE_URL:      https://placeholder-api.execute-api.ap-south-1.amazonaws.com
           REACT_APP_WHATSAPP_NUMBER:   "919637655556"
+          REACT_APP_NR_LICENSE_KEY:    placeholder-nr-key
           CI: false
         run: npm run build
 
@@ -214,6 +215,19 @@ jobs:
         working-directory: lambda
         run: npm install --omit=dev
 
+      # ── Inject shared/tracing.js into each Lambda package ─────────────────
+      # Each Lambda is zipped from its own subdirectory and requires
+      # '../shared/tracing'. We copy the shared dir into each Lambda
+      # folder at package time so the relative path resolves inside the zip.
+      - name: Inject shared tracing into Lambda packages
+        working-directory: lambda
+        run: |
+          for DIR in create-order update-order-status update-order-items send-notification get-order-by-token; do
+            mkdir -p $DIR/shared
+            cp shared/tracing.js $DIR/shared/tracing.js
+            echo "✓ Copied shared/tracing.js → $DIR/shared/"
+          done
+
       # ── create-order ──────────────────────────────────────────────────────
       - name: Package & deploy create-order
         working-directory: lambda
@@ -332,15 +346,19 @@ jobs:
             --value "$INVOICE_BUCKET" --type String --overwrite --no-cli-pager
           echo "INVOICE_BUCKET=$INVOICE_BUCKET" >> $GITHUB_ENV
 
-      - name: Inject Gmail secrets into Lambda environment variables
+      - name: Inject Gmail + OTLP env vars into Lambda environment variables
         env:
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
           GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
         run: |
           GMAIL_SENDER="${GMAIL_SENDER:-orders@stellarglobalsupplies.com}"
-          for FN in "stellar-oms-create-order" "stellar-oms-update-order-status" "stellar-oms-send-notification" "stellar-oms-get-order-by-token"; do
+          # NR ingest key is injected as OTEL_EXPORTER_OTLP_HEADERS.
+          # Lambda env vars are encrypted at rest (KMS) in AWS — safe for ingest keys.
+          OTLP_HEADERS="api-key=${NR_LICENSE_KEY}"
+          for FN in "stellar-oms-create-order" "stellar-oms-update-order-status" "stellar-oms-send-notification" "stellar-oms-get-order-by-token" "stellar-oms-update-order-items"; do
             echo "→ Injecting Gmail env vars into $FN"
             # Get current env vars, merge Gmail secrets
             CURRENT_ENV_JSON=$(aws lambda get-function-configuration --function-name "$FN" \
@@ -353,7 +371,10 @@ jobs:
               --arg token "${GMAIL_REFRESH_TOKEN}" \
               --arg sender "${GMAIL_SENDER}" \
               --arg bucket "${{ needs.terraform.outputs.invoice_bucket_name }}" \
-              '. + {GMAIL_CLIENT_ID: $id, GMAIL_CLIENT_SECRET: $secret, GMAIL_REFRESH_TOKEN: $token, GMAIL_SENDER: $sender, INVOICE_BUCKET_NAME: $bucket}')
+              --arg otlp_headers "${OTLP_HEADERS}" \
+              --arg otel_svc "sgs-orders-app" \
+              --arg otel_env "production" \
+              '. + {GMAIL_CLIENT_ID: $id, GMAIL_CLIENT_SECRET: $secret, GMAIL_REFRESH_TOKEN: $token, GMAIL_SENDER: $sender, INVOICE_BUCKET_NAME: $bucket, OTEL_EXPORTER_OTLP_HEADERS: $otlp_headers, OTEL_SERVICE_NAME: $otel_svc, ENVIRONMENT: $otel_env}')
             # Write full update payload as JSON and use --cli-input-json
             jq -n \
               --arg fn "$FN" \
@@ -422,6 +443,11 @@ jobs:
           REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           REACT_APP_API_BASE_URL:      ${{ steps.targets.outputs.api }}
           REACT_APP_WHATSAPP_NUMBER:   ${{ secrets.WHATSAPP_NUMBER }}
+          # New Relic browser ingest key — baked into the JS bundle at build time.
+          # This is intentional: NR ingest keys are write-only (they cannot read
+          # data) so exposure in a public bundle carries no meaningful risk.
+          # Rotate via GitHub secret NR_LICENSE_KEY if ever compromised.
+          REACT_APP_NR_LICENSE_KEY:    ${{ secrets.NR_LICENSE_KEY }}
           CI: false
         run: npm run build
 
