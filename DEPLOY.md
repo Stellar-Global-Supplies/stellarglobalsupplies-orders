@@ -1,7 +1,7 @@
-# Stellar OMS — Complete Deployment Guide
+# Stellar OMS — Backend Deployment Guide
 
-> **orders.stellarglobalsupplies.com**  
-> React + AWS Lambda + Supabase Auth (Google OAuth)
+> **orders.stellarglobalsupplies.com** (frontend hosted on Vercel)
+> AWS Lambda + API Gateway + Supabase Auth (Google OAuth)
 
 ---
 
@@ -28,14 +28,6 @@ aws iam create-user --user-name stellar-oms-deploy
 aws iam attach-user-policy \
   --user-name stellar-oms-deploy \
   --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess
-
-aws iam attach-user-policy \
-  --user-name stellar-oms-deploy \
-  --policy-arn arn:aws:iam::aws:policy/CloudFrontFullAccess
-
-aws iam attach-user-policy \
-  --user-name stellar-oms-deploy \
-  --policy-arn arn:aws:iam::aws:policy/AmazonRoute53FullAccess
 
 aws iam attach-user-policy \
   --user-name stellar-oms-deploy \
@@ -157,12 +149,8 @@ Edit `terraform.tfvars`:
 
 ```hcl
 aws_region  = "ap-south-1"
-root_domain = "stellarglobalsupplies.com"
 domain_name = "orders.stellarglobalsupplies.com"
 environment = "production"
-
-# Your existing ACM cert ARN (us-east-1 region):
-existing_acm_cert_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 # Leave blank here — set via env vars below
 supabase_url         = ""
@@ -195,16 +183,14 @@ terraform init
 # Preview changes
 terraform plan
 
-# Apply (creates S3, CloudFront, API Gateway, 3 Lambdas, Route53 records)
+# Apply (creates S3 invoice bucket, API Gateway, 5 Lambdas)
 terraform apply
 ```
 
 **Terraform will output:**
 ```
-oms_url         = "https://orders.stellarglobalsupplies.com"
-cloudfront_id   = "EXXXXXXXXXXXX"
-s3_bucket_name  = "stellar-oms-frontend-production"
-api_gateway_url = "https://xxxxxxxxxx.execute-api.ap-south-1.amazonaws.com"
+api_gateway_url     = "https://xxxxxxxxxx.execute-api.ap-south-1.amazonaws.com"
+invoice_bucket_name = "stellar-oms-invoices-production"
 ```
 
 ---
@@ -218,16 +204,11 @@ In your GitHub repo → **Settings** → **Secrets and variables** → **Actions
 | `AWS_ACCESS_KEY_ID` | IAM access key | Step 1a output |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret | Step 1a output |
 | `SUPABASE_URL` | Project URL | Supabase → Settings → API |
-| `SUPABASE_ANON_KEY` | anon/public key | Supabase → Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role key | Supabase → Settings → API |
-| `ACM_CERT_ARN` | ACM cert ARN | Your existing cert ARN (us-east-1) |
 | `GMAIL_CLIENT_ID` | OAuth2 Client ID | Google Cloud Console → Credentials |
 | `GMAIL_CLIENT_SECRET` | OAuth2 Client Secret | Google Cloud Console → Credentials |
 | `GMAIL_REFRESH_TOKEN` | Refresh Token | Step 1c — OAuth2 Playground |
 | `GMAIL_SENDER` | `orders@stellarglobalsupplies.com` | Gmail account used above |
-| `WHATSAPP_NUMBER` | `919637655556` | Your business WhatsApp |
-| `S3_BUCKET_NAME` | bucket name | Terraform output (fallback) |
-| `CLOUDFRONT_DISTRIBUTION_ID` | CF ID | Terraform output (fallback) |
 | `API_BASE_URL` | API Gateway URL | Terraform output (fallback) |
 
 ---
@@ -235,47 +216,38 @@ In your GitHub repo → **Settings** → **Secrets and variables** → **Actions
 ## Step 5 — First Deploy
 
 ```bash
-# Push to main to trigger the full pipeline
+# Push to main to trigger the backend pipeline
 git add -A
-git commit -m "feat: initial Stellar OMS deployment"
+git commit -m "feat: backend-only deployment"
 git push origin main
 ```
 
 ### Pipeline stages (watch in GitHub Actions tab):
 
 ```
-Build React App          ~2 min   ✅ compile check
-  ↓
 Terraform                ~3 min   ✅ apply infra
   ↓
-Deploy Lambda Functions  ~2 min   ✅ 3 functions updated
-  ↓
-Deploy Frontend          ~3 min   ✅ S3 sync + CF invalidation
+Deploy Lambda Functions  ~2 min   ✅ 5 functions updated
 ```
 
-Total: **~10 minutes** from push to live.
+Total: **~5 minutes** from push to live.
+
+> **Frontend:** The frontend is deployed separately via Vercel from another repository.
 
 ---
 
 ## Step 6 — Verify Everything Works
 
 ```bash
-# 1. Check the site is live
-curl -I https://orders.stellarglobalsupplies.com
-
-# 2. Test API Gateway
+# 1. Test API Gateway
 export API_URL=$(terraform -chdir=terraform output -raw api_gateway_url)
 curl -X POST "$API_URL/orders" \
   -H "Content-Type: application/json" \
   -d '{"test": true}' 
 # → Should return 401 Unauthorized (auth is working)
 
-# 3. Check Lambda logs
+# 2. Check Lambda logs
 aws logs tail /aws/lambda/stellar-oms-create-order --follow
-
-# 4. Check CloudFront is serving
-curl -I https://orders.stellarglobalsupplies.com | grep -i "x-cache"
-# → Should show: x-cache: Hit from cloudfront (after first load)
 ```
 
 ---
@@ -290,14 +262,6 @@ In **Supabase Dashboard** → **Authentication** → **URL Configuration**:
 ---
 
 ## Environment Variables Reference
-
-### Frontend (`frontend/.env`)
-```bash
-REACT_APP_SUPABASE_URL=https://xxxx.supabase.co
-REACT_APP_SUPABASE_ANON_KEY=eyJ...          # anon/public key only
-REACT_APP_API_BASE_URL=https://xxxx.execute-api.ap-south-1.amazonaws.com
-REACT_APP_WHATSAPP_NUMBER=919637655556
-```
 
 ### Lambda (set via Terraform → AWS Console)
 ```bash
@@ -315,16 +279,10 @@ NODE_ENV=production
 ## Local Development
 
 ```bash
-# Terminal 1 — Frontend
-cd frontend
-cp .env.example .env     # fill in your values
-npm install
-npm start                # http://localhost:3000
-
-# Test Lambda functions locally (optional)
+# Install Lambda dependencies
 cd lambda
 npm install
-# Use AWS SAM or just test via the deployed API Gateway
+# Test Lambda functions locally via AWS SAM or the deployed API Gateway
 ```
 
 ---
@@ -336,39 +294,32 @@ npm install
 | Google sign-in redirects back with error | Check Supabase redirect URLs & Google OAuth authorised URIs |
 | `products` dropdown empty | Verify `top_sku` view exists with `skus` column in Supabase |
 | `materials` dropdown empty | Verify `material_spilt` view exists with `material_type` column |
-| Emails not sending | Check SES is out of sandbox; verify `orders@stellarglobalsupplies.com` |
-| 403 on CloudFront | S3 bucket policy may not have propagated — wait 2 min and retry |
+| Emails not sending | Check Gmail API credentials in SSM Parameter Store |
 | Lambda error logs | `aws logs tail /aws/lambda/stellar-oms-create-order --follow` |
 | Terraform state lock | `terraform force-unlock LOCK_ID` |
-| Route53 cert validation stuck | DNS propagation can take up to 30 min for new certs |
 
 ---
 
 ## Architecture Diagram
 
 ```
-User Browser
-     │
-     ▼
-CloudFront (HTTPS)                         Google OAuth
-     │           orders.stellarglobalsupplies.com     │
-     ▼                                                 │
-S3 Bucket ◄── React SPA ──────────────── Supabase Auth ◄─┘
-                  │
-                  │  JWT Bearer token
-                  ▼
-          API Gateway (HTTP API)
-                  │
-          ┌───────┼───────┐
-          ▼       ▼       ▼
-     Lambda   Lambda   Lambda
-     create   update   notify
-     -order   -status  -email
-          │       │       │
-          └───────┴───────┘
-                  │
-          Supabase (orders table)
-                  │
-                  ▼
-              AWS SES → Customer Email
-```
+Frontend (Vercel)                              Google OAuth
+  orders.stellarglobalsupplies.com                  │
+  │                                                │
+  │  JWT Bearer token                              │
+  ▼                                                │
+API Gateway (HTTP API) ◄── Supabase Auth ◄─────────┘
+  │
+  ┌───────┼───────┬───────┐
+  ▼       ▼       ▼       ▼
+Lambda   Lambda  Lambda  Lambda
+create   update  notify  get-order
+-order   -status -email  -by-token
+  │       │       │       │
+  └───────┴───────┴───────┘
+  │
+  Supabase (orders table)
+  │
+  ▼
+Gmail API → Customer Email
+S3 Bucket → Invoice Storage

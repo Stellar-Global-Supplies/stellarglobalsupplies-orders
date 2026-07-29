@@ -1,9 +1,10 @@
 ##############################################################################
-# GitHub Actions — Stellar OMS  Full CI/CD Pipeline
-# Triggers: push to main  →  test → terraform → lambda → frontend → done
+# GitHub Actions — Stellar OMS Backend CI/CD Pipeline
+# Triggers: push to main  →  terraform → lambda → done
+# Frontend is deployed separately via Vercel from another repo.
 ##############################################################################
 
-name: Deploy Stellar OMS
+name: Deploy Stellar OMS Backend
 
 on:
   push:
@@ -24,48 +25,9 @@ env:
   NODE_VERSION: "20"
 
 ##############################################################################
-# JOB 1 — Build & test the React app
+# JOB 1 — Bootstrap Terraform state backend
 ##############################################################################
 jobs:
-  build:
-    name: Build React App
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package.json
-
-      - name: Install deps
-        working-directory: frontend
-        run: npm install
-
-      - name: Build (compile check)
-        working-directory: frontend
-        env:
-          # Placeholder values — build validates compilation only
-          REACT_APP_SUPABASE_URL:      https://placeholder.supabase.co
-          REACT_APP_SUPABASE_ANON_KEY: placeholder-anon-key
-          REACT_APP_API_BASE_URL:      https://placeholder-api.execute-api.ap-south-1.amazonaws.com
-          REACT_APP_WHATSAPP_NUMBER:   "919637655556"
-          REACT_APP_NR_LICENSE_KEY:    placeholder-nr-key
-          CI: false
-        run: npm run build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: frontend/build
-          retention-days: 1
-  
-  ##############################################################################
-  # JOB 2 — Terraform (Backend bootstrap + plan/apply)
-  ##############################################################################
-
   bootstrap:
     name: 🛠 Bootstrap state backend
     runs-on: ubuntu-latest
@@ -120,21 +82,21 @@ jobs:
             aws dynamodb wait table-exists --table-name "$TABLE" --region "$REGION"
             echo "✓ Table created"
           fi
+
   ##############################################################################
   # JOB 2 — Terraform (plan on PR, apply on main)
   ##############################################################################
   terraform:
     name: Terraform
     runs-on: ubuntu-latest
-    needs: [build, bootstrap]
+    needs: [bootstrap]
     if: github.ref == 'refs/heads/main' || github.event.inputs.run_terraform == 'true'
     defaults:
       run:
         working-directory: terraform
     outputs:
-      s3_bucket: ${{ steps.outputs.outputs.s3_bucket }}
-      cf_id:     ${{ steps.outputs.outputs.cf_id }}
-      api_url:   ${{ steps.outputs.outputs.api_url }}
+      api_url:          ${{ steps.outputs.outputs.api_url }}
+      invoice_bucket:   ${{ steps.outputs.outputs.invoice_bucket }}
 
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +134,6 @@ jobs:
           terraform plan -no-color \
             -var="supabase_url=${{ secrets.SUPABASE_URL }}" \
             -var="supabase_service_key=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -var="existing_acm_cert_arn=${{ secrets.ACM_CERT_ARN }}" \
             -out=tfplan 2>&1 | tee plan.txt
 
       - name: Terraform Apply
@@ -184,9 +145,8 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: outputs
         run: |
-          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> "$GITHUB_OUTPUT"
-          echo "cf_id=$(terraform output -raw cloudfront_id)"       >> "$GITHUB_OUTPUT"
-          echo "api_url=$(terraform output -raw api_gateway_url)"   >> "$GITHUB_OUTPUT"
+          echo "api_url=$(terraform output -raw api_gateway_url)"     >> "$GITHUB_OUTPUT"
+          echo "invoice_bucket=$(terraform output -raw invoice_bucket_name)" >> "$GITHUB_OUTPUT"
 
   ##############################################################################
   # JOB 3 — Deploy Lambda functions
@@ -194,7 +154,7 @@ jobs:
   deploy-lambda:
     name: Deploy Lambda Functions
     runs-on: ubuntu-latest
-    needs: [build, terraform]
+    needs: [terraform]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
@@ -324,7 +284,7 @@ jobs:
 
       - name: Store invoice bucket in SSM
         run: |
-          INVOICE_BUCKET="${{ needs.terraform.outputs.invoice_bucket_name }}"
+          INVOICE_BUCKET="${{ needs.terraform.outputs.invoice_bucket }}"
           if [ -z "$INVOICE_BUCKET" ]; then
             INVOICE_BUCKET=$(aws ssm get-parameter --name /stellar-oms/invoice-bucket --query Parameter.Value --output text 2>/dev/null || echo "stellar-oms-invoices-production")
           fi
@@ -356,7 +316,7 @@ jobs:
               --arg secret "${GMAIL_CLIENT_SECRET}" \
               --arg token "${GMAIL_REFRESH_TOKEN}" \
               --arg sender "${GMAIL_SENDER}" \
-              --arg bucket "${{ needs.terraform.outputs.invoice_bucket_name }}" \
+              --arg bucket "${{ needs.terraform.outputs.invoice_bucket }}" \
               --arg otlp_headers "${OTLP_HEADERS}" \
               --arg otel_svc "sgs-orders-app" \
               --arg otel_env "production" \
@@ -373,111 +333,13 @@ jobs:
             echo "✓ $FN updated"
           done
 
-  ##############################################################################
-  # JOB 4 — Build with real env vars & deploy to S3 + CloudFront
-  ##############################################################################
-  deploy-frontend:
-    name: Deploy Frontend
-    runs-on: ubuntu-latest
-    needs: [build, terraform, deploy-lambda]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package.json
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
-
-      # Resolve bucket + CF ID (terraform outputs → SSM fallback → secret fallback)
-      - name: Resolve deployment targets
-        id: targets
-        run: |
-          S3="${{ needs.terraform.outputs.s3_bucket }}"
-          CF="${{ needs.terraform.outputs.cf_id }}"
-          API="${{ needs.terraform.outputs.api_url }}"
-          if [ -z "$S3" ]; then
-            S3=$(aws ssm get-parameter --name /stellar-oms/s3-bucket --query Parameter.Value --output text 2>/dev/null || echo "${{ secrets.S3_BUCKET_NAME }}")
-          fi
-          if [ -z "$CF" ]; then
-            CF=$(aws ssm get-parameter --name /stellar-oms/cf-distribution-id --query Parameter.Value --output text 2>/dev/null || echo "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}")
-          fi
-          if [ -z "$API" ]; then
-            API=$(aws ssm get-parameter --name /stellar-oms/api-url --query Parameter.Value --output text 2>/dev/null || echo "${{ secrets.API_BASE_URL }}")
-          fi
-          echo "s3=$S3"   >> "$GITHUB_OUTPUT"
-          echo "cf=$CF"   >> "$GITHUB_OUTPUT"
-          echo "api=$API" >> "$GITHUB_OUTPUT"
-
-      - name: Install deps
-        working-directory: frontend
-        run: npm install
-
-      - name: Build React app (production)
-        working-directory: frontend
-        env:
-          REACT_APP_SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
-          REACT_APP_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          REACT_APP_API_BASE_URL:      ${{ steps.targets.outputs.api }}
-          REACT_APP_WHATSAPP_NUMBER:   ${{ secrets.WHATSAPP_NUMBER }}
-          # New Relic browser ingest key — baked into the JS bundle at build time.
-          # This is intentional: NR ingest keys are write-only (they cannot read
-          # data) so exposure in a public bundle carries no meaningful risk.
-          # Rotate via GitHub secret NR_LICENSE_KEY if ever compromised.
-          REACT_APP_NR_LICENSE_KEY:    ${{ secrets.NR_LICENSE_KEY }}
-          CI: false
-        run: npm run build
-
-      # Hashed assets → long cache
-      - name: Upload hashed assets to S3
-        run: |
-          aws s3 sync frontend/build/static \
-            s3://${{ steps.targets.outputs.s3 }}/static \
-            --cache-control "public,max-age=31536000,immutable" \
-            --no-cli-pager
-
-      # HTML + manifests → no cache
-      - name: Upload HTML & manifests to S3
-        run: |
-          aws s3 sync frontend/build \
-            s3://${{ steps.targets.outputs.s3 }} \
-            --delete \
-            --exclude "static/*" \
-            --cache-control "no-cache,no-store,must-revalidate" \
-            --no-cli-pager
-
-      - name: Invalidate CloudFront cache
-        run: |
-          INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.targets.outputs.cf }} \
-            --paths "/*" \
-            --query 'Invalidation.Id' \
-            --output text \
-            --no-cli-pager)
-          echo "Invalidation ID: $INVALIDATION_ID"
-          echo "Waiting for invalidation to complete..."
-          aws cloudfront wait invalidation-completed \
-            --distribution-id ${{ steps.targets.outputs.cf }} \
-            --id $INVALIDATION_ID
-
       - name: Deployment summary
         run: |
-          echo "## ✅ Stellar OMS Deployed Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Stellar OMS Backend Deployed Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Resource | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🌐 OMS URL | https://orders.stellarglobalsupplies.com |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 S3 Bucket | \`${{ steps.targets.outputs.s3 }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| ☁️ CloudFront | \`${{ steps.targets.outputs.cf }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔗 API URL | \`${{ steps.targets.outputs.api }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔗 API URL | \`${{ needs.terraform.outputs.api_url }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Invoice Bucket | \`${{ needs.terraform.outputs.invoice_bucket }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| 🔖 Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| 👤 Triggered by | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY

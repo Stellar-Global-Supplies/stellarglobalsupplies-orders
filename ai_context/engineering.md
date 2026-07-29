@@ -6,17 +6,17 @@ Serverless
 ## System Overview
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   React SPA     │────▶│  API Gateway     │────▶│  Lambda         │
-│  (S3 + CF)     │     │  HTTP API        │     │  Functions      │
+│  Frontend       │     │  API Gateway     │     │  Lambda         │
+│  (Vercel)       │────▶│  HTTP API        │────▶│  Functions      │
 └─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                         │
-                                                         ▼
+                                                          │
+                                                          ▼
 ┌─────────────────┐                               ┌─────────────────┐
 │  Supabase       │◀──────────────────────────────│  Gmail API      │
 │  (PostgreSQL)  │                               │  (OAuth2)       │
 └─────────────────┘                               └─────────────────┘
-                                                         │
-                                                         ▼
+                                                          │
+                                                          ▼
 ┌─────────────────┐                               ┌─────────────────┐
 │  SSM Params     │                               │  S3 Invoices    │
 │  (Secrets)      │                               │  (Public)       │
@@ -28,6 +28,7 @@ Serverless
 - Used Gmail API instead of AWS SES to avoid deliverability issues and leverage existing business email reputation
 - Split invoice storage into separate S3 bucket with public read access to enable direct download links without Lambda proxy
 - Implemented UUID-based tracking tokens for public order lookup to avoid exposing internal order IDs
+- Migrated frontend to Vercel (separate repo) to decouple frontend deployment from backend infrastructure
 
 ## Hard Problems Solved
 
@@ -56,9 +57,9 @@ Serverless
 - Team size: 1 developer
 
 ## Performance Wins
-- Used Supabase Realtime subscriptions instead of polling for order updates, reducing unnecessary API calls
-- CloudFront CDN for frontend and invoice downloads reduces latency globally
 - Lambda memory tuned to 256MB (create/update) and 128MB (tracking) to balance cost and performance
+- esbuild bundling reduces Lambda deployment packages from 230MB+ to ~700KB
+- Direct S3 access for invoice downloads avoids Lambda proxy overhead
 
 ## What We'd Do Differently
 - Would use AWS SES with proper domain verification instead of Gmail API to avoid OAuth token management complexity

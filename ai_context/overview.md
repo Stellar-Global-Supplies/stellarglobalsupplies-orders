@@ -1,16 +1,16 @@
 # Overview
 
 ## Project Name
-Stellar Global Supplies - Order Management System
+Stellar Global Supplies - Order Management System (Backend)
 
 ## One-Liner
-This project manages customer orders with real-time status tracking, email notifications, and WhatsApp integration.
+This project provides the serverless backend for managing customer orders with real-time status tracking, email notifications, and WhatsApp integration.
 
 ## Problem It Solves
 B2B wholesale businesses struggle with manual order tracking, customer communication, and invoice management. Without a centralized system, order status updates are delayed, customers call repeatedly for updates, and invoices get lost in email threads.
 
 ## Solution
-A serverless web application that centralizes order management with automated email/WhatsApp notifications, public tracking links, and S3-based invoice storage. Customers can self-serve order status via unique URLs, reducing support overhead.
+A serverless backend (AWS Lambda + API Gateway + Supabase) that centralizes order management with automated email/WhatsApp notifications, public tracking links, and S3-based invoice storage. The frontend is maintained in a separate repository and deployed via Vercel.
 
 ## Who Uses It
 Operations teams and sales staff at B2B wholesale companies managing high-volume customer orders.
