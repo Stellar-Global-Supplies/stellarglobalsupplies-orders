@@ -241,7 +241,7 @@ async function supabaseSpan(table, operation, fn) {
     const result = await fn();
     // Supabase JS returns { data, error } — surface error as span exception
     if (result?.error) throw result.error;
-    return result?.data ?? result;
+    return result;
   });
 }
 
