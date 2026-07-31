@@ -8,15 +8,16 @@
  * 2. S3 upload — removed ACL:'public-read' (blocked on most buckets); use pre-signed URLs instead
  * 3. Email attachment — fetch invoice bytes via pre-signed URL, not re-parsed S3 key from URL
  * 4. invoice_uploaded_at always written on successful upload
+ * 5. Migrated from aws-sdk v2 to @aws-sdk/client-s3 v3
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
 const ws               = require('ws');
-const AWS              = require('aws-sdk');
-const https            = require('https');
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
-const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-production';
 // Pre-signed URL expiry = 7 days (matches the customer-facing expiry window)
 const PRESIGNED_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
@@ -32,6 +33,15 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
   { realtime: { transport: ws } }
 );
+
+// ── Helper: convert S3 Readable stream to Buffer ─────────────────────────────
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 // ── Gmail helper ────────────────────────────────────────────────────────────
 function buildGmailClient() {
@@ -138,12 +148,14 @@ function buildRawMessageWithAttachment({ to, subject, html, text, from, attachme
  */
 async function fetchInvoiceBytes(invoiceS3Key) {
   try {
-    const s3Object = await s3.getObject({
+    const command = new GetObjectCommand({
       Bucket: INVOICE_BUCKET,
       Key: invoiceS3Key,
-    }).promise();
+    });
+    const s3Object = await s3.send(command);
+    const buffer = await streamToBuffer(s3Object.Body);
     return {
-      data: s3Object.Body,
+      data: buffer,
       mimeType: s3Object.ContentType || 'application/pdf',
       filename: invoiceS3Key.split('/').pop() || 'invoice.pdf',
     };
@@ -348,18 +360,23 @@ const _handler = async (event) => {
               const key = `invoices/${orderId}/${Date.now()}_${filename}`;
               try {
                 // FIX: No ACL — rely on bucket policy / pre-signed URLs instead
-                await withSpan('s3.putObject', { 'aws.s3.bucket': INVOICE_BUCKET, 'aws.s3.key': key }, () => 
-                  s3.putObject({ Bucket: INVOICE_BUCKET, Key: key, Body: part.content, ContentType: mimeType }).promise()
-                );
+                await withSpan('s3.putObject', { 'aws.s3.bucket': INVOICE_BUCKET, 'aws.s3.key': key }, async () => {
+                  const command = new PutObjectCommand({
+                    Bucket: INVOICE_BUCKET,
+                    Key: key,
+                    Body: part.content,
+                    ContentType: mimeType,
+                  });
+                  await s3.send(command);
+                });
 
                 invoiceS3Key = key;
 
                 // Generate a pre-signed URL valid for 7 days
-                invoiceUrl = s3.getSignedUrl('getObject', {
+                invoiceUrl = await getSignedUrl(s3, new GetObjectCommand({
                   Bucket:  INVOICE_BUCKET,
                   Key:     key,
-                  Expires: PRESIGNED_EXPIRY_SECONDS,
-                });
+                }), { expiresIn: PRESIGNED_EXPIRY_SECONDS });
 
                 console.log('Invoice uploaded to S3:', key);
               } catch (s3Err) {

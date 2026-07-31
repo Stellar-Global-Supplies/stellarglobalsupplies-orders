@@ -178,7 +178,7 @@ jobs:
       # ── esbuild — bundle each Lambda into a single minified file ──────────
       # This replaces the old approach of copying node_modules into each zip.
       # Result: each Lambda zip is ~700KB instead of 230MB+.
-      # aws-sdk is excluded (provided by the Lambda Node.js 20 runtime).
+      # @aws-sdk/* is excluded (provided by the Lambda Node.js 20 runtime).
       # shared/tracing.js is resolved at build time by esbuild — no copy needed.
       - name: Bundle all Lambdas with esbuild
         working-directory: lambda
@@ -191,7 +191,7 @@ jobs:
               --platform=node \
               --target=node20 \
               --outfile=dist/$FN/index.js \
-              --external:aws-sdk \
+              --external:@aws-sdk/* \
               --minify
             echo "✓ $FN: $(du -sh dist/$FN/index.js | cut -f1)"
           done

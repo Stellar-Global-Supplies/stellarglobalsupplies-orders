@@ -1,12 +1,13 @@
 /**
  * Lambda: POST /orders/{id}/notify
  * Manually re-sends email notification for any order via Gmail API
+ * Migrated from aws-sdk v2 to @aws-sdk/client-s3 v3
  */
 
 const { createClient } = require('@supabase/supabase-js');
 const { google }       = require('googleapis');
 const ws               = require('ws');
-const AWS              = require('aws-sdk');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 let emailTemplates;
 try   { emailTemplates = require('./lib/emailTemplates'); }
@@ -14,7 +15,7 @@ catch (e) { emailTemplates = require('../create-order/emailTemplates'); }
 const { buildOrderConfirmationEmail, buildStatusUpdateEmail } = emailTemplates;
 const { tracedHandler, withSpan, supabaseSpan } = require('../shared/tracing');
 
-const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const INVOICE_BUCKET = process.env.INVOICE_BUCKET_NAME || 'stellar-oms-invoices-production';
 
 const supabase = createClient(
@@ -26,6 +27,15 @@ const supabase = createClient(
     },
   }
 );
+
+// ── Helper: convert S3 Readable stream to Buffer ─────────────────────────────
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
 
 function buildGmailClient() {
   const auth = new google.auth.OAuth2(
@@ -136,15 +146,17 @@ async function sendEmail({ to, subject, html, text, invoiceUrl }) {
       const urlMatch = invoiceUrl.match(/https?:\/\/[^/]+\/(.+)$/);
       if (urlMatch) {
         const key = decodeURIComponent(urlMatch[1]);
-        const s3Object = await s3.getObject({
+        const command = new GetObjectCommand({
           Bucket: INVOICE_BUCKET,
           Key: key,
-        }).promise();
+        });
+        const s3Object = await s3.send(command);
+        const buffer = await streamToBuffer(s3Object.Body);
         
         // Build message with attachment
         const raw = buildRawMessageWithAttachment({
           to, subject, html, text, from,
-          attachment: s3Object.Body,
+          attachment: buffer,
           filename: key.split('/').pop() || 'invoice',
           mimeType: s3Object.ContentType || 'application/pdf',
         });
